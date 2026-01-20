@@ -451,33 +451,7 @@ export const AssetsPanel: React.FC = () => {
     [startDrag],
   );
 
-  const handleConfirmAspectRatioMatch = useCallback(async () => {
-    if (!aspectRatioDialogData) return;
-
-    await updateSettings({
-      width: aspectRatioDialogData.videoWidth,
-      height: aspectRatioDialogData.videoHeight,
-    });
-
-    setShowAspectRatioDialog(false);
-    const itemToAdd = aspectRatioDialogData.itemToAdd;
-    setAspectRatioDialogData(null);
-
-    await handleAddToTimeline(itemToAdd);
-  }, [aspectRatioDialogData, updateSettings]);
-
-  const handleCancelAspectRatioMatch = useCallback(async () => {
-    if (!aspectRatioDialogData) return;
-
-    setShowAspectRatioDialog(false);
-    const itemToAdd = aspectRatioDialogData.itemToAdd;
-    setAspectRatioDialogData(null);
-
-    await handleAddToTimeline(itemToAdd);
-  }, [aspectRatioDialogData]);
-
-  // Handle adding media to timeline (double-click or button)
-  const handleAddToTimeline = useCallback(async (item: MediaItem) => {
+  const addMediaToTimeline = useCallback(async (item: MediaItem) => {
     const {
       addClip,
       addTrack,
@@ -485,27 +459,6 @@ export const AssetsPanel: React.FC = () => {
     } = useProjectStore.getState();
     const tracks = currentProject.timeline.tracks;
 
-    const hasClips = tracks.some((track) => track.clips.length > 0);
-
-    if (
-      !hasClips &&
-      item.type === "video" &&
-      item.metadata?.width &&
-      item.metadata?.height
-    ) {
-      const videoWidth = item.metadata.width;
-      const videoHeight = item.metadata.height;
-      const projectWidth = currentProject.settings.width;
-      const projectHeight = currentProject.settings.height;
-
-      if (videoWidth !== projectWidth || videoHeight !== projectHeight) {
-        setAspectRatioDialogData({ videoWidth, videoHeight, itemToAdd: item });
-        setShowAspectRatioDialog(true);
-        return;
-      }
-    }
-
-    // Find appropriate track based on media type
     let targetTrack = tracks.find((t) => {
       if (item.type === "video") {
         return t.type === "video";
@@ -519,7 +472,6 @@ export const AssetsPanel: React.FC = () => {
       return false;
     });
 
-    // If no matching track exists, create one
     if (!targetTrack) {
       if (item.type === "image") {
         await addTrack("image", 0);
@@ -534,7 +486,6 @@ export const AssetsPanel: React.FC = () => {
     }
 
     if (targetTrack) {
-      // Calculate start time at the end of existing clips
       let startTime = 0;
       for (const clip of targetTrack.clips) {
         const clipEnd = clip.startTime + clip.duration;
@@ -545,18 +496,15 @@ export const AssetsPanel: React.FC = () => {
 
       const result = await addClip(targetTrack.id, item.id, startTime);
 
-      // If it's a video with audio, also add audio to audio track
       if (
         item.type === "video" &&
         item.metadata?.channels &&
         item.metadata.channels > 0
       ) {
-        // Re-fetch tracks after state update to get current audio track
         const updatedTracks =
           useProjectStore.getState().project.timeline.tracks;
         const audioTrack = updatedTracks.find((t) => t.type === "audio");
         if (audioTrack && result.success && result.actionId) {
-          // Add a linked audio clip that references the same media
           await addClip(audioTrack.id, item.id, startTime);
         }
       }
@@ -567,6 +515,60 @@ export const AssetsPanel: React.FC = () => {
       );
     }
   }, []);
+
+  const handleConfirmAspectRatioMatch = useCallback(async () => {
+    if (!aspectRatioDialogData) return;
+
+    await updateSettings({
+      width: aspectRatioDialogData.videoWidth,
+      height: aspectRatioDialogData.videoHeight,
+    });
+
+    const itemToAdd = aspectRatioDialogData.itemToAdd;
+    setShowAspectRatioDialog(false);
+    setAspectRatioDialogData(null);
+
+    await addMediaToTimeline(itemToAdd);
+  }, [aspectRatioDialogData, updateSettings, addMediaToTimeline]);
+
+  const handleCancelAspectRatioMatch = useCallback(async () => {
+    if (!aspectRatioDialogData) return;
+
+    const itemToAdd = aspectRatioDialogData.itemToAdd;
+    setShowAspectRatioDialog(false);
+    setAspectRatioDialogData(null);
+
+    await addMediaToTimeline(itemToAdd);
+  }, [aspectRatioDialogData, addMediaToTimeline]);
+
+  const handleAddToTimeline = useCallback(
+    async (item: MediaItem) => {
+      const { project: currentProject } = useProjectStore.getState();
+      const tracks = currentProject.timeline.tracks;
+      const hasClips = tracks.some((track) => track.clips.length > 0);
+
+      if (
+        !hasClips &&
+        item.type === "video" &&
+        item.metadata?.width &&
+        item.metadata?.height
+      ) {
+        const videoWidth = item.metadata.width;
+        const videoHeight = item.metadata.height;
+        const projectWidth = currentProject.settings.width;
+        const projectHeight = currentProject.settings.height;
+
+        if (videoWidth !== projectWidth || videoHeight !== projectHeight) {
+          setAspectRatioDialogData({ videoWidth, videoHeight, itemToAdd: item });
+          setShowAspectRatioDialog(true);
+          return;
+        }
+      }
+
+      await addMediaToTimeline(item);
+    },
+    [addMediaToTimeline],
+  );
 
   const triggerFileInput = useCallback(() => {
     fileInputRef.current?.click();
