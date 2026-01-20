@@ -480,14 +480,13 @@ export const useProjectStore = create<ProjectState>()(
         const { project } = get();
 
         try {
-          // Initialize and use MediaBridge for proper media processing
           const mediaBridge = getMediaBridge();
           if (!mediaBridge.isInitialized()) {
             await initializeMediaBridge();
           }
 
-          // Import the file with full processing (thumbnails, waveforms, metadata)
-          const importResult = await mediaBridge.importFile(file, true);
+          const isLargeFile = file.size > 50 * 1024 * 1024;
+          const importResult = await mediaBridge.importFile(file, true, isLargeFile);
 
           if (!importResult.success || !importResult.media) {
             return {
@@ -584,7 +583,6 @@ export const useProjectStore = create<ProjectState>()(
               filmstripThumbnails.length > 0 ? filmstripThumbnails : undefined,
           };
 
-          // Add to media library
           const updatedProject = {
             ...project,
             mediaLibrary: {
@@ -605,6 +603,45 @@ export const useProjectStore = create<ProjectState>()(
             );
           } catch (err) {
             console.error("[ProjectStore] Failed to persist media blob:", err);
+          }
+
+          if (isLargeFile && !thumbnailUrl) {
+            setTimeout(async () => {
+              try {
+                const thumbs = await mediaBridge.generateThumbnailsForMedia(
+                  file,
+                  mediaType,
+                );
+                if (thumbs.length > 0) {
+                  const currentProject = get().project;
+                  const mediaIndex = currentProject.mediaLibrary.items.findIndex(
+                    (m) => m.id === newMediaItem.id,
+                  );
+                  if (mediaIndex !== -1) {
+                    const updatedItems = [...currentProject.mediaLibrary.items];
+                    updatedItems[mediaIndex] = {
+                      ...updatedItems[mediaIndex],
+                      thumbnailUrl: thumbs[0].dataUrl,
+                      filmstripThumbnails: thumbs.map((t) => ({
+                        timestamp: t.timestamp,
+                        url: t.dataUrl,
+                      })),
+                    };
+                    set({
+                      project: {
+                        ...currentProject,
+                        mediaLibrary: {
+                          ...currentProject.mediaLibrary,
+                          items: updatedItems,
+                        },
+                      },
+                    });
+                  }
+                }
+              } catch {
+                // Background thumbnail generation is best-effort
+              }
+            }, 100);
           }
 
           return {

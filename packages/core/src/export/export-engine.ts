@@ -270,13 +270,10 @@ export class ExportEngine {
     this.abortController = new AbortController();
     this.currentExport = { startTime: Date.now(), framesRendered: 0 };
 
-    const gpuEnabled = await this.initializeGPUForExport(
+    await this.initializeGPUForExport(
       fullSettings.width,
       fullSettings.height,
     );
-    if (gpuEnabled) {
-    } else {
-    }
 
     const { timeline } = project;
     const timelineDuration = this.calculateTimelineDuration(timeline);

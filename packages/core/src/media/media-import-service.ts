@@ -26,6 +26,7 @@ export interface MediaImportOptions {
   generateWaveform?: boolean;
   waveformSamplesPerSecond?: number;
   useFallback?: boolean;
+  quickMode?: boolean;
 }
 
 const DEFAULT_OPTIONS: Required<MediaImportOptions> = {
@@ -35,6 +36,7 @@ const DEFAULT_OPTIONS: Required<MediaImportOptions> = {
   generateWaveform: true,
   waveformSamplesPerSecond: 100,
   useFallback: true,
+  quickMode: false,
 };
 
 export class MediaImportService {
@@ -118,7 +120,7 @@ export class MediaImportService {
         }
       }
       let thumbnails: ThumbnailResult[] = [];
-      if (opts.generateThumbnails) {
+      if (opts.generateThumbnails && !opts.quickMode) {
         if (mediaType === "video" && metadata.hasVideo) {
           try {
             thumbnails = await this.mediaEngine.generateThumbnails(
@@ -134,7 +136,6 @@ export class MediaImportService {
             );
           }
         } else if (mediaType === "image") {
-          // For images, create a single thumbnail from the image itself
           try {
             const img = new Image();
             const objectUrl = URL.createObjectURL(file);
@@ -151,7 +152,6 @@ export class MediaImportService {
               img.src = objectUrl;
             });
 
-            // Create canvas for thumbnail
             const canvas = document.createElement("canvas");
             const targetWidth = opts.thumbnailWidth || 320;
             const aspectRatio = img.height / img.width;
@@ -182,7 +182,7 @@ export class MediaImportService {
         }
       }
       let waveformData: WaveformData | null = null;
-      if (opts.generateWaveform && metadata.hasAudio) {
+      if (opts.generateWaveform && metadata.hasAudio && !opts.quickMode) {
         try {
           waveformData = await this.mediaEngine.generateWaveform(
             file,
@@ -471,6 +471,65 @@ export class MediaImportService {
       audio: ["MP3", "WAV", "AAC", "OGG", "FLAC"],
       image: ["JPEG", "PNG", "WebP", "GIF"],
     };
+  }
+
+  async generateThumbnailsForMedia(
+    file: File | Blob,
+    mediaType: "video" | "audio" | "image",
+    options: { count?: number; width?: number } = {},
+  ): Promise<ThumbnailResult[]> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    const { count = 10, width = 160 } = options;
+
+    if (mediaType === "video") {
+      return this.mediaEngine.generateThumbnails(file, count, width);
+    }
+
+    if (mediaType === "image") {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve();
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Failed to load image"));
+        };
+        img.src = objectUrl;
+      });
+
+      const canvas = document.createElement("canvas");
+      const aspectRatio = img.height / img.width;
+      const targetHeight = Math.round(width * aspectRatio);
+
+      canvas.width = width;
+      canvas.height = targetHeight;
+
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, targetHeight);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+        return [{ timestamp: 0, canvas, dataUrl }];
+      }
+    }
+
+    return [];
+  }
+
+  async generateWaveformForMedia(
+    file: File | Blob,
+    samplesPerSecond = 100,
+  ): Promise<WaveformData | null> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    return this.mediaEngine.generateWaveform(file, samplesPerSecond);
   }
 }
 let importServiceInstance: MediaImportService | null = null;

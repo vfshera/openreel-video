@@ -90,6 +90,7 @@ export class MediaBridge {
   async importFile(
     file: File,
     generateWaveform = true,
+    quickMode = false,
   ): Promise<MediaBridgeImportResult> {
     if (!this.initialized || !this.mediaImportService) {
       return {
@@ -99,24 +100,20 @@ export class MediaBridge {
       };
     }
 
-    // Capture current project state for rollback on failure
-    // Maintain current state on failed import
     const projectStateBefore = this.captureProjectState();
 
     try {
-      // Import the media file
-      // Generate more thumbnails for filmstrip display (10 thumbnails at different timestamps)
       const result = await this.mediaImportService.importMedia(file, {
-        generateThumbnails: true,
-        thumbnailCount: 10, // More thumbnails for better filmstrip effect
-        thumbnailWidth: 160, // Smaller width for filmstrip thumbnails
-        generateWaveform,
+        generateThumbnails: !quickMode,
+        thumbnailCount: 10,
+        thumbnailWidth: 160,
+        generateWaveform: generateWaveform && !quickMode,
         waveformSamplesPerSecond: 100,
         useFallback: true,
+        quickMode,
       });
 
       if (!result.success || !result.media) {
-        // Display error message and maintain current state
         return {
           success: false,
           error: result.error || "Import failed",
@@ -125,8 +122,6 @@ export class MediaBridge {
         };
       }
 
-      // Validate metadata extraction
-      // Extract metadata (duration, dimensions, codec)
       const metadata = result.media.metadata;
       if (!this.validateMetadata(metadata)) {
         return {
@@ -143,7 +138,6 @@ export class MediaBridge {
         hasWaveform: result.media.waveformData !== null,
       };
     } catch (error) {
-      // Maintain current state on failed import
       this.restoreProjectState(projectStateBefore);
 
       const errorMessage =
@@ -153,6 +147,30 @@ export class MediaBridge {
         error: errorMessage,
         hasWaveform: false,
       };
+    }
+  }
+
+  async generateThumbnailsForMedia(
+    file: File | Blob,
+    mediaType: "video" | "audio" | "image",
+  ): Promise<{ timestamp: number; dataUrl: string }[]> {
+    if (!this.initialized || !this.mediaImportService) {
+      return [];
+    }
+
+    try {
+      const thumbnails = await this.mediaImportService.generateThumbnailsForMedia(
+        file,
+        mediaType,
+        { count: 10, width: 160 },
+      );
+
+      return thumbnails.map((thumb) => ({
+        timestamp: thumb.timestamp,
+        dataUrl: thumb.dataUrl || "",
+      })).filter((t) => t.dataUrl);
+    } catch {
+      return [];
     }
   }
 

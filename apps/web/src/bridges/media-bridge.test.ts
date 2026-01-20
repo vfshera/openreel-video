@@ -320,3 +320,120 @@ describe("MediaBridge - Error Handling", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("MediaBridge - Quick Mode Import", () => {
+  let mediaBridge: MediaBridge;
+
+  beforeEach(() => {
+    mediaBridge = new MediaBridge();
+    mockImportMedia.mockReset();
+  });
+
+  it("should pass quickMode=true to import service when specified", async () => {
+    mockImportMedia.mockResolvedValue({
+      success: true,
+      media: {
+        id: "large-file-id",
+        name: "large-video.mp4",
+        type: "video",
+        metadata: {
+          duration: 600,
+          width: 1920,
+          height: 1080,
+          frameRate: 30,
+          codec: "h264",
+          sampleRate: 48000,
+          channels: 2,
+          fileSize: 100000000,
+        },
+        thumbnails: [],
+        waveformData: null,
+      },
+    });
+
+    await mediaBridge.initialize();
+    const file = new File(["test"], "large-video.mp4", { type: "video/mp4" });
+
+    const result = await mediaBridge.importFile(file, true, true);
+
+    expect(mockImportMedia).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({
+        quickMode: true,
+        generateThumbnails: false,
+        generateWaveform: false,
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("should not skip thumbnails when quickMode is false", async () => {
+    mockImportMedia.mockResolvedValue({
+      success: true,
+      media: {
+        id: "normal-file-id",
+        name: "video.mp4",
+        type: "video",
+        metadata: {
+          duration: 10,
+          width: 1920,
+          height: 1080,
+          frameRate: 30,
+          codec: "h264",
+          sampleRate: 48000,
+          channels: 2,
+          fileSize: 1000000,
+        },
+        thumbnails: [{ timestamp: 0, dataUrl: "data:image/jpeg;base64,abc" }],
+        waveformData: null,
+      },
+    });
+
+    await mediaBridge.initialize();
+    const file = new File(["test"], "video.mp4", { type: "video/mp4" });
+
+    const result = await mediaBridge.importFile(file, true, false);
+
+    expect(mockImportMedia).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({
+        quickMode: false,
+        generateThumbnails: true,
+        generateWaveform: true,
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("should return success even without thumbnails in quick mode", async () => {
+    mockImportMedia.mockResolvedValue({
+      success: true,
+      media: {
+        id: "quick-import-id",
+        name: "large-video.mp4",
+        type: "video",
+        metadata: {
+          duration: 300,
+          width: 3840,
+          height: 2160,
+          frameRate: 30,
+          codec: "h264",
+          sampleRate: 48000,
+          channels: 2,
+          fileSize: 500000000,
+        },
+        thumbnails: [],
+        waveformData: null,
+      },
+    });
+
+    await mediaBridge.initialize();
+    const file = new File(["test"], "4k-video.mp4", { type: "video/mp4" });
+
+    const result = await mediaBridge.importFile(file, true, true);
+
+    expect(result.success).toBe(true);
+    expect(result.media?.thumbnails).toEqual([]);
+    expect(result.hasWaveform).toBe(false);
+  });
+});

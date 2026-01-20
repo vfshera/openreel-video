@@ -90,6 +90,14 @@ export class FFmpegFallback {
     | ((data: { progress: number; time?: number }) => void)
     | null = null;
 
+  private calculateBufsize(bitrate: string): string {
+    const match = bitrate.match(/^(\d+(?:\.\d+)?)\s*([KkMmGg]?)$/);
+    if (!match) return bitrate;
+    const value = parseFloat(match[1]);
+    const unit = match[2] || "";
+    return `${Math.round(value * 2)}${unit}`;
+  }
+
   async load(): Promise<void> {
     if (this.loaded) return;
     if (this.loading) return this.loading;
@@ -105,19 +113,35 @@ export class FFmpegFallback {
 
       this.ffmpeg = new FFmpeg() as unknown as FFmpegInstance;
 
-      const baseURL = "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm";
+      const useMultiThread = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated;
+      const baseURL = useMultiThread
+        ? "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm"
+        : "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
 
-      const [coreURL, wasmURL, workerURL] = await Promise.all([
-        toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-        toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
-      ]);
+      if (useMultiThread) {
+        const [coreURL, wasmURL, workerURL] = await Promise.all([
+          toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+          toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+          toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript"),
+        ]);
 
-      await this.ffmpeg.load({
-        coreURL,
-        wasmURL,
-        workerURL,
-      });
+        await this.ffmpeg.load({
+          coreURL,
+          wasmURL,
+          workerURL,
+        });
+      } else {
+        const [coreURL, wasmURL] = await Promise.all([
+          toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+          toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        ]);
+
+        await this.ffmpeg.load({
+          coreURL,
+          wasmURL,
+        });
+      }
+
       this.loaded = true;
     } catch (error) {
       this.loading = null;
@@ -600,17 +624,9 @@ export class FFmpegFallback {
     } = options;
 
     const outputFilename = `output.${format}`;
-    const tempDir = "frames";
     let frameCount = 0;
 
     try {
-      try {
-        await this.ffmpeg!.listDir(tempDir);
-      } catch {
-        await this.ffmpeg!.exec(["-f", "lavfi", "-i", "nullsrc=s=1x1:d=0.001", "-frames:v", "0", "-y", "/dev/null"]);
-      }
-
-      const framePromises: Promise<void>[] = [];
       const BATCH_SIZE = 10;
 
       for await (const { image, frameIndex } of frames) {
@@ -649,8 +665,6 @@ export class FFmpegFallback {
         }
       }
 
-      await Promise.all(framePromises);
-
       let hasAudio = false;
       if (audioBuffer && audioBuffer.length > 0) {
         const wavBlob = this.encodeAudioBufferToWav(audioBuffer);
@@ -687,17 +701,19 @@ export class FFmpegFallback {
       if (format === "mp4") {
         ffmpegArgs.push(
           "-c:v", "libx264",
-          "-preset", "ultrafast",
+          "-preset", "fast",
           "-crf", "23",
-          "-b:v", videoBitrate,
+          "-maxrate", videoBitrate,
+          "-bufsize", this.calculateBufsize(videoBitrate),
           "-pix_fmt", "yuv420p",
         );
       } else {
         ffmpegArgs.push(
           "-c:v", "libvpx-vp9",
-          "-b:v", videoBitrate,
-          "-deadline", "realtime",
-          "-cpu-used", "8",
+          "-crf", "31",
+          "-b:v", "0",
+          "-deadline", "good",
+          "-cpu-used", "4",
           "-row-mt", "1",
         );
       }
@@ -934,9 +950,10 @@ export class FFmpegFallback {
         if (format === "mp4") {
           ffmpegArgs.push(
             "-c:v", "libx264",
-            "-preset", "ultrafast",
+            "-preset", "fast",
             "-crf", "23",
-            "-b:v", videoBitrate,
+            "-maxrate", videoBitrate,
+            "-bufsize", this.calculateBufsize(videoBitrate),
             "-pix_fmt", "yuv420p",
             "-c:a", "aac",
             "-b:a", audioBitrate,
@@ -944,9 +961,10 @@ export class FFmpegFallback {
         } else {
           ffmpegArgs.push(
             "-c:v", "libvpx-vp9",
-            "-b:v", videoBitrate,
-            "-deadline", "realtime",
-            "-cpu-used", "8",
+            "-crf", "31",
+            "-b:v", "0",
+            "-deadline", "good",
+            "-cpu-used", "4",
             "-row-mt", "1",
             "-c:a", "libopus",
             "-b:a", audioBitrate,
