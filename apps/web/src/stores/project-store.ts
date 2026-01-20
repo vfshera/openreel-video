@@ -54,6 +54,7 @@ import {
   deleteMediaBlob,
   loadProjectMedia,
 } from "../services/media-storage";
+import { restoreMediaItem } from "../utils/media-recovery";
 
 /**
  * ProjectState - Complete state interface for project management
@@ -595,12 +596,16 @@ export const useProjectStore = create<ProjectState>()(
 
           set({ project: updatedProject });
 
-          saveMediaBlob(
-            updatedProject.id,
-            newMediaItem.id,
-            file,
-            newMediaItem.metadata,
-          ).catch((err) => console.warn("[ProjectStore] Failed to persist media blob:", err));
+          try {
+            await saveMediaBlob(
+              updatedProject.id,
+              newMediaItem.id,
+              file,
+              newMediaItem.metadata,
+            );
+          } catch (err) {
+            console.error("[ProjectStore] Failed to persist media blob:", err);
+          }
 
           return {
             success: true,
@@ -2094,11 +2099,10 @@ export const useProjectStore = create<ProjectState>()(
           const storedMedia = await loadProjectMedia(recoveredProject.id);
           const blobMap = new Map(storedMedia.map((m) => [m.id, m.blob]));
 
-          const restoredItems = recoveredProject.mediaLibrary.items.map(
-            (item) => ({
-              ...item,
-              blob: blobMap.get(item.id) || item.blob,
-            }),
+          const restoredItems = await Promise.all(
+            recoveredProject.mediaLibrary.items.map((item) =>
+              restoreMediaItem(item, blobMap.get(item.id)),
+            ),
           );
 
           const projectWithMedia: Project = {
