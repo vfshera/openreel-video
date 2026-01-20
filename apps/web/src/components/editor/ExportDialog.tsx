@@ -26,6 +26,46 @@ interface ExportDialogProps {
   onClose: () => void;
   onExport: (settings: VideoExportSettings) => void;
   duration?: number;
+  projectWidth?: number;
+  projectHeight?: number;
+}
+
+type AspectRatioType = "vertical" | "square" | "horizontal";
+
+function getAspectRatioType(width: number, height: number): AspectRatioType {
+  const ratio = width / height;
+  if (ratio < 0.9) return "vertical";
+  if (ratio > 1.1) return "horizontal";
+  return "square";
+}
+
+function getRecommendedPresetsForAspectRatio(
+  presets: PlatformExportPreset[],
+  aspectType: AspectRatioType,
+): PlatformExportPreset[] {
+  const aspectRatioMap: Record<string, AspectRatioType> = {
+    "9:16": "vertical",
+    "1:1": "square",
+    "16:9": "horizontal",
+    "4:5": "vertical",
+  };
+
+  return presets.filter((preset) => {
+    if (!preset.aspectRatio) return false;
+    const presetAspectType = aspectRatioMap[preset.aspectRatio];
+    return presetAspectType === aspectType;
+  });
+}
+
+function getAspectRatioLabel(aspectType: AspectRatioType): string {
+  switch (aspectType) {
+    case "vertical":
+      return "Vertical (TikTok, Reels, Shorts)";
+    case "square":
+      return "Square (Instagram Feed)";
+    case "horizontal":
+      return "Horizontal (YouTube, Twitter)";
+  }
 }
 
 const PLATFORM_ICONS: Record<string, React.ReactNode> = {
@@ -47,19 +87,25 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   onClose,
   onExport,
   duration = 0,
+  projectWidth = 1920,
+  projectHeight = 1080,
 }) => {
   const [activeTab, setActiveTab] = useState<"presets" | "custom">("presets");
-  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(
+    "recommended",
+  );
   const [selectedPreset, setSelectedPreset] =
     useState<PlatformExportPreset | null>(null);
   const [presets, setPresets] = useState<PlatformExportPreset[]>([]);
   const [platforms, setPlatforms] = useState<string[]>([]);
 
+  const aspectType = getAspectRatioType(projectWidth, projectHeight);
+
   const [customSettings, setCustomSettings] = useState<VideoExportSettings>({
     format: "mp4",
     codec: "h264",
-    width: 1920,
-    height: 1080,
+    width: projectWidth,
+    height: projectHeight,
     frameRate: 30,
     bitrate: 15000,
     bitrateMode: "vbr",
@@ -83,12 +129,24 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     if (isOpen) {
       setPresets(exportPresetsManager.getAllPresets());
       setPlatforms(exportPresetsManager.getPlatforms());
+      setSelectedPlatform("recommended");
+      setSelectedPreset(null);
     }
   }, [isOpen]);
 
-  const filteredPresets = selectedPlatform
-    ? presets.filter((p) => p.platform === selectedPlatform)
-    : exportPresetsManager.getRecommendedPresets();
+  const recommendedForVideo = getRecommendedPresetsForAspectRatio(
+    presets,
+    aspectType,
+  );
+
+  const filteredPresets =
+    selectedPlatform === "recommended"
+      ? recommendedForVideo.length > 0
+        ? recommendedForVideo
+        : exportPresetsManager.getRecommendedPresets()
+      : selectedPlatform
+        ? presets.filter((p) => p.platform === selectedPlatform)
+        : exportPresetsManager.getRecommendedPresets();
 
   const handleExport = useCallback(() => {
     const settings =
@@ -166,16 +224,22 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             <>
               <div className="w-48 border-r border-border overflow-y-auto">
                 <button
-                  onClick={() => setSelectedPlatform(null)}
-                  className={`w-full flex items-center gap-2 p-3 text-sm transition-colors ${
-                    selectedPlatform === null
+                  onClick={() => setSelectedPlatform("recommended")}
+                  className={`w-full flex flex-col items-start p-3 text-sm transition-colors ${
+                    selectedPlatform === "recommended"
                       ? "bg-primary/10 text-primary border-r-2 border-primary"
                       : "text-text-secondary hover:bg-background-tertiary"
                   }`}
                 >
-                  <Star size={14} />
-                  Recommended
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} />
+                    <span className="font-medium">For Your Video</span>
+                  </div>
+                  <span className="text-[10px] text-text-muted mt-0.5 ml-5">
+                    {getAspectRatioLabel(aspectType)}
+                  </span>
                 </button>
+                <div className="h-px bg-border my-1" />
                 {platforms.map((platform) => (
                   <button
                     key={platform}

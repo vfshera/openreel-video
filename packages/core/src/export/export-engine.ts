@@ -231,43 +231,37 @@ export class ExportEngine {
       },
     };
 
+    if (fullSettings.codec === "prores") {
+      console.warn(
+        `[ExportEngine] ProRes encoding is not supported in browsers. Switching to H.264 high quality.`,
+      );
+      fullSettings.codec = "h264";
+      fullSettings.format = "mp4";
+      fullSettings.bitrate = 25000;
+      fullSettings.quality = 95;
+    }
+
     const pixelCount = fullSettings.width * fullSettings.height;
-    const isProRes = fullSettings.codec === "prores";
     const isMemoryIntensiveCodec =
       fullSettings.codec === "vp9" ||
       fullSettings.codec === "av1" ||
-      fullSettings.codec === "h265" ||
-      isProRes;
-    const maxSafePixels = isProRes
-      ? 1280 * 720
-      : isMemoryIntensiveCodec
-        ? 1920 * 1080
-        : 3840 * 2160;
+      fullSettings.codec === "h265";
+    const maxSafePixels = isMemoryIntensiveCodec ? 1920 * 1080 : 3840 * 2160;
 
     if (pixelCount > maxSafePixels && isMemoryIntensiveCodec) {
-      const maxDimension = isProRes ? 1280 : 1920;
       console.warn(
-        `[ExportEngine] ${fullSettings.codec.toUpperCase()} at ${fullSettings.width}x${fullSettings.height} may cause browser instability. Reducing for stability.`,
+        `[ExportEngine] ${fullSettings.codec.toUpperCase()} at ${fullSettings.width}x${fullSettings.height} may cause browser instability. Reducing to 1080p for stability.`,
       );
       const aspectRatio = fullSettings.width / fullSettings.height;
       if (aspectRatio > 1) {
-        fullSettings.width = maxDimension;
-        fullSettings.height = Math.round(maxDimension / aspectRatio);
+        fullSettings.width = 1920;
+        fullSettings.height = Math.round(1920 / aspectRatio);
       } else {
-        fullSettings.height = maxDimension;
-        fullSettings.width = Math.round(maxDimension * aspectRatio);
+        fullSettings.height = 1920;
+        fullSettings.width = Math.round(1920 * aspectRatio);
       }
       fullSettings.width = Math.round(fullSettings.width / 2) * 2;
       fullSettings.height = Math.round(fullSettings.height / 2) * 2;
-
-      if (isProRes) {
-        fullSettings.codec = "h264";
-        fullSettings.format = "mp4";
-        fullSettings.bitrate = 20000;
-        console.warn(
-          `[ExportEngine] ProRes not supported in browser at this resolution. Switching to H.264 at ${fullSettings.width}x${fullSettings.height}.`,
-        );
-      }
     }
 
     this.abortController = new AbortController();
@@ -374,8 +368,7 @@ export class ExportEngine {
       const isIntensiveCodec =
         fullSettings.codec === "vp9" ||
         fullSettings.codec === "av1" ||
-        fullSettings.codec === "h265" ||
-        fullSettings.codec === "prores";
+        fullSettings.codec === "h265";
       const flushInterval = isIntensiveCodec ? 10 : 30;
 
       for (let frame = 0; frame < totalFrames; frame++) {

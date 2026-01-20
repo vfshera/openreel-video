@@ -848,6 +848,8 @@ export const Toolbar: React.FC = () => {
         onClose={() => setIsExportDialogOpen(false)}
         onExport={handleCustomExport}
         duration={project.timeline?.duration ?? 0}
+        projectWidth={project.settings?.width ?? 1920}
+        projectHeight={project.settings?.height ?? 1080}
       />
 
       <ScreenRecorder
