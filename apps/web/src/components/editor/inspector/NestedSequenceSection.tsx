@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   Layers,
   FolderOpen,
@@ -32,8 +32,22 @@ export const NestedSequenceSection: React.FC<NestedSequenceSectionProps> = ({
   const [expandedCompound, setExpandedCompound] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [nestedSequenceEngine, setNestedSequenceEngine] =
+    useState<import("@openreel/core").NestedSequenceEngine | null>(null);
 
-  const nestedSequenceEngine = getNestedSequenceEngine();
+  useEffect(() => {
+    let cancelled = false;
+    const loadEngine = async () => {
+      const engine = await getNestedSequenceEngine();
+      if (!cancelled) {
+        setNestedSequenceEngine(engine);
+      }
+    };
+    loadEngine();
+    return () => {
+      cancelled = true;
+    };
+  }, [getNestedSequenceEngine]);
 
   const allCompoundClips = useMemo(() => {
     return nestedSequenceEngine?.getAllCompoundClips() || [];

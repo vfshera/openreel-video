@@ -353,7 +353,7 @@ describe("Export Readiness - Subtitle Handling", () => {
     expect(updated?.startTime).toBe(0);
   });
 
-  it("should export valid SRT format", () => {
+  it("should export valid SRT format", async () => {
     const store = useProjectStore.getState();
 
     store.addSubtitle({
@@ -384,7 +384,7 @@ describe("Export Readiness - Subtitle Handling", () => {
       },
     });
 
-    const srt = store.exportSRT();
+    const srt = await store.exportSRT();
 
     expect(srt).toContain("1");
     expect(srt).toContain("First subtitle");

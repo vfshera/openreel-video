@@ -721,7 +721,7 @@ describe("ProjectStore - Subtitles", () => {
     expect(subtitle?.text).toBe("Updated");
   });
 
-  it("should export SRT", () => {
+  it("should export SRT", async () => {
     useProjectStore.getState().addSubtitle({
       id: "sub-1",
       text: "First subtitle",
@@ -736,13 +736,13 @@ describe("ProjectStore - Subtitles", () => {
       },
     });
 
-    const srt = useProjectStore.getState().exportSRT();
+    const srt = await useProjectStore.getState().exportSRT();
     expect(srt).toContain("First subtitle");
     expect(srt).toContain("00:00:00");
   });
 
-  it("should get subtitle style presets", () => {
-    const presets = useProjectStore.getState().getSubtitleStylePresets();
+  it("should get subtitle style presets", async () => {
+    const presets = await useProjectStore.getState().getSubtitleStylePresets();
     expect(Array.isArray(presets)).toBe(true);
   });
 });

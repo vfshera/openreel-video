@@ -150,13 +150,9 @@ export const TemplatesBrowserPanel: React.FC<TemplatesBrowserPanelProps> = ({
   useEffect(() => {
     const loadTemplates = async () => {
       setIsLoading(true);
-      const templateEngine = getTemplateEngine();
-      if (!templateEngine) {
-        setIsLoading(false);
-        return;
-      }
 
       try {
+        const templateEngine = await getTemplateEngine();
         await templateEngine.initialize();
         const localTemplates = await templateEngine.listTemplates();
         const cloudTemplates = await templateCloudService.listTemplates();
@@ -193,8 +189,7 @@ export const TemplatesBrowserPanel: React.FC<TemplatesBrowserPanelProps> = ({
       setSelectedTemplateId(templateId);
       setApplyError(null);
 
-      const templateEngine = getTemplateEngine();
-      if (!templateEngine) return;
+      const templateEngine = await getTemplateEngine();
 
       const selectedTemplate = templates.find((t) => t.id === templateId);
       let template = await templateEngine.loadTemplate(templateId);
@@ -225,9 +220,8 @@ export const TemplatesBrowserPanel: React.FC<TemplatesBrowserPanelProps> = ({
   const handleApplyTemplate = useCallback(async () => {
     if (!selectedTemplateId) return;
 
-    const templateEngine = getTemplateEngine();
+    const templateEngine = await getTemplateEngine();
     const titleEngine = getTitleEngine();
-    if (!templateEngine) return;
 
     setApplyError(null);
 
@@ -462,10 +456,9 @@ export const TemplatesBrowserPanel: React.FC<TemplatesBrowserPanelProps> = ({
           setIsSaveDialogOpen(false);
           const loadTemplates = async () => {
             setIsLoading(true);
-            const templateEngine = getTemplateEngine();
-            if (!templateEngine) return;
 
             try {
+              const templateEngine = await getTemplateEngine();
               await templateEngine.initialize();
               const localTemplates = await templateEngine.listTemplates();
               const cloudTemplates = await templateCloudService.listTemplates();

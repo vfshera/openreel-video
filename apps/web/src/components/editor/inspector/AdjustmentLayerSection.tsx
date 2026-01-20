@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   Layers,
   Plus,
@@ -99,8 +99,22 @@ export const AdjustmentLayerSection: React.FC<AdjustmentLayerSectionProps> = ({
 
   const [expandedLayer, setExpandedLayer] = useState<string | null>(null);
   const [showBlendModes, setShowBlendModes] = useState(false);
+  const [adjustmentLayerEngine, setAdjustmentLayerEngine] =
+    useState<import("@openreel/core").AdjustmentLayerEngine | null>(null);
 
-  const adjustmentLayerEngine = getAdjustmentLayerEngine();
+  useEffect(() => {
+    let cancelled = false;
+    const loadEngine = async () => {
+      const engine = await getAdjustmentLayerEngine();
+      if (!cancelled) {
+        setAdjustmentLayerEngine(engine);
+      }
+    };
+    loadEngine();
+    return () => {
+      cancelled = true;
+    };
+  }, [getAdjustmentLayerEngine]);
 
   const currentTrack = useMemo(() => {
     for (const track of project.timeline.tracks) {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { Video, Pipette, RefreshCw, Eye, EyeOff, Layers } from "lucide-react";
 import { useProjectStore } from "../../../stores/project-store";
 import { useEngineStore } from "../../../stores/engine-store";
@@ -105,11 +105,22 @@ export const GreenScreenSection: React.FC<GreenScreenSectionProps> = ({
   );
 
   const [isPickingColor, setIsPickingColor] = useState(false);
+  const [chromaKeyEngine, setChromaKeyEngine] =
+    useState<import("@openreel/core").ChromaKeyEngine | null>(null);
 
-  const chromaKeyEngine = useMemo(
-    () => getChromaKeyEngine(),
-    [getChromaKeyEngine],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    const loadEngine = async () => {
+      const engine = await getChromaKeyEngine();
+      if (!cancelled) {
+        setChromaKeyEngine(engine);
+      }
+    };
+    loadEngine();
+    return () => {
+      cancelled = true;
+    };
+  }, [getChromaKeyEngine]);
 
   const settings = useMemo<ChromaKeySettings>(() => {
     if (!chromaKeyEngine) {

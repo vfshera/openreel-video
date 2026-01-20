@@ -89,11 +89,8 @@ export const TemplatePreviewModal: React.FC<TemplatePreviewModalProps> = ({
     setError(null);
 
     try {
-      const templateEngine = getTemplateEngine();
+      const templateEngine = await getTemplateEngine();
       const titleEngine = getTitleEngine();
-      if (!templateEngine) {
-        throw new Error("Template engine not available");
-      }
 
       const effectiveValues = { ...values };
       for (const placeholder of template.placeholders) {

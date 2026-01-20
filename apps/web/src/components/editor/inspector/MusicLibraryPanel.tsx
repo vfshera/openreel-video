@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   Music,
   Zap,
@@ -121,14 +121,27 @@ export const MusicLibraryPanel: React.FC = () => {
   const [selectedMoods, setSelectedMoods] = useState<MoodTag[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [allMusic, setAllMusic] = useState<SoundItem[]>([]);
+  const [allSfx, setAllSfx] = useState<SoundItem[]>([]);
 
-  const soundLibrary = getSoundLibraryEngine();
+  useEffect(() => {
+    let cancelled = false;
+    const loadSounds = async () => {
+      const engine = await getSoundLibraryEngine();
+      if (!cancelled) {
+        setAllMusic(engine.getMusic());
+        setAllSfx(engine.getSFX());
+      }
+    };
+    loadSounds();
+    return () => {
+      cancelled = true;
+    };
+  }, [getSoundLibraryEngine]);
 
   const sounds = useMemo(() => {
-    if (!soundLibrary) return [];
-
-    let results =
-      activeTab === "music" ? soundLibrary.getMusic() : soundLibrary.getSFX();
+    let results = activeTab === "music" ? allMusic : allSfx;
+    if (results.length === 0) return [];
 
     if (activeTab === "music" && selectedGenre !== "all") {
       results = results.filter((s) => s.subcategory === selectedGenre);
@@ -155,7 +168,8 @@ export const MusicLibraryPanel: React.FC = () => {
 
     return results;
   }, [
-    soundLibrary,
+    allMusic,
+    allSfx,
     activeTab,
     selectedGenre,
     selectedSfxCategory,
@@ -165,31 +179,32 @@ export const MusicLibraryPanel: React.FC = () => {
 
   const handlePlay = useCallback(
     async (sound: SoundItem) => {
-      if (!soundLibrary) return;
+      const engine = await getSoundLibraryEngine();
 
       if (playingId === sound.id) {
-        soundLibrary.stopPreview();
+        engine.stopPreview();
         setPlayingId(null);
       } else {
-        soundLibrary.stopPreview();
+        engine.stopPreview();
         setPlayingId(sound.id);
-        await soundLibrary.previewSound(sound);
+        await engine.previewSound(sound);
       }
     },
-    [soundLibrary, playingId],
+    [getSoundLibraryEngine, playingId],
   );
 
-  const handleStop = useCallback(() => {
-    if (!soundLibrary) return;
-    soundLibrary.stopPreview();
+  const handleStop = useCallback(async () => {
+    const engine = await getSoundLibraryEngine();
+    engine.stopPreview();
     setPlayingId(null);
-  }, [soundLibrary]);
+  }, [getSoundLibraryEngine]);
 
   const handleAddToTimeline = useCallback(
     async (sound: SoundItem) => {
-      if (!project || !soundLibrary) return;
+      if (!project) return;
 
-      const blob = soundLibrary.getSoundBlob(sound.id);
+      const engine = await getSoundLibraryEngine();
+      const blob = engine.getSoundBlob(sound.id);
       if (!blob) {
         console.error("[MusicLibrary] Failed to get sound blob for:", sound.id);
         return;
@@ -232,7 +247,7 @@ export const MusicLibraryPanel: React.FC = () => {
         await addClip(targetTrack.id, mediaId, trackEndTime);
       }
     },
-    [project, soundLibrary, addTrack, addClip, importMedia],
+    [project, getSoundLibraryEngine, addTrack, addClip, importMedia],
   );
 
   const toggleMood = useCallback((mood: MoodTag) => {

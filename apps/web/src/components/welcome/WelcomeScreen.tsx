@@ -14,6 +14,7 @@ import { SOCIAL_MEDIA_PRESETS, type SocialMediaCategory } from "@openreel/core";
 import { TemplateGallery } from "./TemplateGallery";
 import { RecentProjects } from "./RecentProjects";
 import { useRouter } from "../../hooks/use-router";
+import { useEditorPreload } from "../../hooks/useEditorPreload";
 
 interface FormatOption {
   id: string;
@@ -140,6 +141,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
 
   const [viewMode, setViewMode] = useState<ViewMode>(initialTab ?? "home");
   const [hoveredFormat, setHoveredFormat] = useState<string | null>(null);
+
+  useEditorPreload(true);
 
   const handleCreateProject = useCallback(
     (option: FormatOption) => {

@@ -1,5 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
-import { EditorInterface } from "./components/index";
+import { useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { ToastContainer } from "./components/Toast";
 import { ScriptViewDialog } from "./components/editor/ScriptViewDialog";
 import { SearchModal } from "./components/editor/SearchModal";
@@ -12,6 +11,19 @@ import { useProjectStore } from "./stores/project-store";
 import { useRouter } from "./hooks/use-router";
 import { useProjectRecovery } from "./hooks/useProjectRecovery";
 import { SOCIAL_MEDIA_PRESETS, type SocialMediaCategory } from "@openreel/core";
+
+const EditorInterface = lazy(() =>
+  import("./components/editor/EditorInterface").then((m) => ({
+    default: m.EditorInterface,
+  }))
+);
+
+const LoadingSpinner: React.FC<{ message: string }> = ({ message }) => (
+  <div className="h-screen w-screen bg-background flex flex-col items-center justify-center">
+    <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+    <p className="text-sm text-text-secondary">{message}</p>
+  </div>
+);
 
 const PRESET_DIMENSIONS: Record<string, SocialMediaCategory> = {
   "1080x1920": "tiktok",
@@ -124,7 +136,9 @@ function App() {
       ) : showWelcome ? (
         <WelcomeScreen initialTab={initialTab} />
       ) : (
-        <EditorInterface />
+        <Suspense fallback={<LoadingSpinner message="Loading editor..." />}>
+          <EditorInterface />
+        </Suspense>
       )}
       <ToastContainer />
       <ScriptViewDialog

@@ -43,27 +43,23 @@ export const AutoCaptionPanel: React.FC = () => {
   );
 
   const handleStartTranscription = useCallback(async () => {
-    const speechEngine = getSpeechToTextEngine();
-    if (!speechEngine) {
-      setError("Speech-to-text engine not available");
-      return;
-    }
-
     setError(null);
     setSegments([]);
     setIsTranscribing(true);
 
-    speechEngine.setOptions({ language: selectedLanguage });
-
-    speechEngine.onProgress((prog) => {
-      setProgress(prog);
-    });
-
-    speechEngine.onSegment((segment) => {
-      setSegments((prev) => [...prev, segment]);
-    });
-
     try {
+      const speechEngine = await getSpeechToTextEngine();
+
+      speechEngine.setOptions({ language: selectedLanguage });
+
+      speechEngine.onProgress((prog) => {
+        setProgress(prog);
+      });
+
+      speechEngine.onSegment((segment) => {
+        setSegments((prev) => [...prev, segment]);
+      });
+
       await speechEngine.startLiveTranscription();
     } catch (err) {
       setError(
@@ -73,9 +69,8 @@ export const AutoCaptionPanel: React.FC = () => {
     }
   }, [getSpeechToTextEngine, selectedLanguage]);
 
-  const handleStopTranscription = useCallback(() => {
-    const speechEngine = getSpeechToTextEngine();
-    if (!speechEngine) return;
+  const handleStopTranscription = useCallback(async () => {
+    const speechEngine = await getSpeechToTextEngine();
 
     const result = speechEngine.stopTranscription();
     setIsTranscribing(false);
@@ -88,7 +83,7 @@ export const AutoCaptionPanel: React.FC = () => {
       });
 
       if (selectedStyle !== "default") {
-        applySubtitleStylePreset(selectedStyle);
+        await applySubtitleStylePreset(selectedStyle);
       }
     }
   }, [
@@ -98,9 +93,10 @@ export const AutoCaptionPanel: React.FC = () => {
     selectedStyle,
   ]);
 
-  const handleApplySegments = useCallback(() => {
-    const speechEngine = getSpeechToTextEngine();
-    if (!speechEngine || segments.length === 0) return;
+  const handleApplySegments = useCallback(async () => {
+    if (segments.length === 0) return;
+
+    const speechEngine = await getSpeechToTextEngine();
 
     const subtitles = speechEngine.segmentsToSubtitles(segments);
     subtitles.forEach((subtitle) => {
@@ -108,7 +104,7 @@ export const AutoCaptionPanel: React.FC = () => {
     });
 
     if (selectedStyle !== "default") {
-      applySubtitleStylePreset(selectedStyle);
+      await applySubtitleStylePreset(selectedStyle);
     }
 
     setSegments([]);

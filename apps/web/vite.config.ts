@@ -22,9 +22,19 @@ export default defineConfig({
     target: "esnext",
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ["react", "react-dom"],
-          zustand: ["zustand"],
+        manualChunks: (id) => {
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+            return "react";
+          }
+          if (id.includes("node_modules/zustand")) {
+            return "zustand";
+          }
+          if (id.includes("node_modules/three")) {
+            return "three";
+          }
+          if (id.includes("node_modules/@radix-ui")) {
+            return "radix";
+          }
         },
       },
     },

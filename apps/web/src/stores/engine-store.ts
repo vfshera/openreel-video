@@ -27,6 +27,18 @@ import {
 } from "@openreel/core";
 import type { RenderedFrame } from "@openreel/core";
 
+const lazyEngineCache = new Map<string, unknown>();
+
+async function getOrCreateEngine<T>(
+  key: string,
+  factory: () => T | Promise<T>
+): Promise<T> {
+  if (!lazyEngineCache.has(key)) {
+    lazyEngineCache.set(key, Promise.resolve(factory()));
+  }
+  return lazyEngineCache.get(key) as Promise<T>;
+}
+
 export interface AudioLevelData {
   peaks: Map<string, number>;
   rms: Map<string, number>;
@@ -82,18 +94,18 @@ export interface EngineState {
   getAudioEngine: () => AudioEngine | null;
   getPlaybackController: () => PlaybackController | null;
   getTitleEngine: () => TitleEngine | null;
-  getSubtitleEngine: () => SubtitleEngine | null;
+  getSubtitleEngine: () => Promise<SubtitleEngine>;
   getGraphicsEngine: () => GraphicsEngine | null;
   getPhotoEngine: () => PhotoEngine | null;
   getExportEngine: () => ExportEngine | null;
-  getSpeechToTextEngine: () => SpeechToTextEngine | null;
-  getTemplateEngine: () => TemplateEngine | null;
-  getSoundLibraryEngine: () => SoundLibraryEngine | null;
-  getChromaKeyEngine: () => ChromaKeyEngine | null;
-  getMultiCamEngine: () => MultiCamEngine | null;
-  getMaskEngine: () => MaskEngine | null;
-  getNestedSequenceEngine: () => NestedSequenceEngine | null;
-  getAdjustmentLayerEngine: () => AdjustmentLayerEngine | null;
+  getSpeechToTextEngine: () => Promise<SpeechToTextEngine>;
+  getTemplateEngine: () => Promise<TemplateEngine>;
+  getSoundLibraryEngine: () => Promise<SoundLibraryEngine>;
+  getChromaKeyEngine: () => Promise<ChromaKeyEngine>;
+  getMultiCamEngine: () => Promise<MultiCamEngine>;
+  getMaskEngine: () => Promise<MaskEngine>;
+  getNestedSequenceEngine: () => Promise<NestedSequenceEngine>;
+  getAdjustmentLayerEngine: () => Promise<AdjustmentLayerEngine>;
 }
 
 /**
@@ -172,15 +184,6 @@ const DEFAULT_PLAYBACK_STATS: PlaybackStats = {
 };
 
 coreTitleEngine.initialize(1920, 1080);
-const eagerSubtitleEngine = new SubtitleEngine();
-const eagerSpeechToTextEngine = new SpeechToTextEngine();
-const eagerTemplateEngine = new TemplateEngine();
-const eagerSoundLibraryEngine = new SoundLibraryEngine();
-const eagerChromaKeyEngine = new ChromaKeyEngine({ width: 1920, height: 1080 });
-const eagerMultiCamEngine = new MultiCamEngine();
-const eagerMaskEngine = new MaskEngine({ width: 1920, height: 1080 });
-const eagerNestedSequenceEngine = new NestedSequenceEngine();
-const eagerAdjustmentLayerEngine = new AdjustmentLayerEngine();
 
 export const useEngineStore = create<EngineState>()(
   subscribeWithSelector((set, get) => ({
@@ -192,18 +195,18 @@ export const useEngineStore = create<EngineState>()(
     audioEngine: null,
     playbackController: null,
     titleEngine: coreTitleEngine,
-    subtitleEngine: eagerSubtitleEngine,
+    subtitleEngine: null,
     graphicsEngine: coreGraphicsEngine,
     photoEngine: null,
     exportEngine: null,
-    speechToTextEngine: eagerSpeechToTextEngine,
-    templateEngine: eagerTemplateEngine,
-    soundLibraryEngine: eagerSoundLibraryEngine,
-    chromaKeyEngine: eagerChromaKeyEngine,
-    multiCamEngine: eagerMultiCamEngine,
-    maskEngine: eagerMaskEngine,
-    nestedSequenceEngine: eagerNestedSequenceEngine,
-    adjustmentLayerEngine: eagerAdjustmentLayerEngine,
+    speechToTextEngine: null,
+    templateEngine: null,
+    soundLibraryEngine: null,
+    chromaKeyEngine: null,
+    multiCamEngine: null,
+    maskEngine: null,
+    nestedSequenceEngine: null,
+    adjustmentLayerEngine: null,
 
     currentFrame: null,
     playbackStats: DEFAULT_PLAYBACK_STATS,
@@ -240,7 +243,6 @@ export const useEngineStore = create<EngineState>()(
           audioEngine,
           playbackController,
           titleEngine: coreTitleEngine,
-          subtitleEngine: eagerSubtitleEngine,
           graphicsEngine: coreGraphicsEngine,
           photoEngine,
           exportEngine,
@@ -272,6 +274,8 @@ export const useEngineStore = create<EngineState>()(
       if (state.currentFrame) {
         state.currentFrame.image.close();
       }
+
+      lazyEngineCache.clear();
 
       set({
         initialized: false,
@@ -368,17 +372,32 @@ export const useEngineStore = create<EngineState>()(
     getAudioEngine: () => get().audioEngine,
     getPlaybackController: () => get().playbackController,
     getTitleEngine: () => get().titleEngine,
-    getSubtitleEngine: () => get().subtitleEngine,
+    getSubtitleEngine: () =>
+      getOrCreateEngine("subtitle", () => new SubtitleEngine()),
     getGraphicsEngine: () => get().graphicsEngine,
     getPhotoEngine: () => get().photoEngine,
     getExportEngine: () => get().exportEngine,
-    getSpeechToTextEngine: () => get().speechToTextEngine,
-    getTemplateEngine: () => get().templateEngine,
-    getSoundLibraryEngine: () => get().soundLibraryEngine,
-    getChromaKeyEngine: () => get().chromaKeyEngine,
-    getMultiCamEngine: () => get().multiCamEngine,
-    getMaskEngine: () => get().maskEngine,
-    getNestedSequenceEngine: () => get().nestedSequenceEngine,
-    getAdjustmentLayerEngine: () => get().adjustmentLayerEngine,
+    getSpeechToTextEngine: () =>
+      getOrCreateEngine("speechToText", () => new SpeechToTextEngine()),
+    getTemplateEngine: () =>
+      getOrCreateEngine("template", () => new TemplateEngine()),
+    getSoundLibraryEngine: () =>
+      getOrCreateEngine("soundLibrary", () => new SoundLibraryEngine()),
+    getChromaKeyEngine: () =>
+      getOrCreateEngine(
+        "chromaKey",
+        () => new ChromaKeyEngine({ width: 1920, height: 1080 })
+      ),
+    getMultiCamEngine: () =>
+      getOrCreateEngine("multiCam", () => new MultiCamEngine()),
+    getMaskEngine: () =>
+      getOrCreateEngine(
+        "mask",
+        () => new MaskEngine({ width: 1920, height: 1080 })
+      ),
+    getNestedSequenceEngine: () =>
+      getOrCreateEngine("nestedSequence", () => new NestedSequenceEngine()),
+    getAdjustmentLayerEngine: () =>
+      getOrCreateEngine("adjustmentLayer", () => new AdjustmentLayerEngine()),
   })),
 );

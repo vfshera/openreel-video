@@ -232,10 +232,12 @@ export interface ProjectState {
   getSubtitle: (
     subtitleId: string,
   ) => import("@openreel/core").Subtitle | undefined;
-  importSRT: (srtContent: string) => { success: boolean; errors: string[] };
-  exportSRT: () => string;
-  applySubtitleStylePreset: (presetName: string) => boolean;
-  getSubtitleStylePresets: () => string[];
+  importSRT: (
+    srtContent: string
+  ) => Promise<{ success: boolean; errors: string[] }>;
+  exportSRT: () => Promise<string>;
+  applySubtitleStylePreset: (presetName: string) => Promise<boolean>;
+  getSubtitleStylePresets: () => Promise<string[]>;
 
   // Marker actions
   addMarker: (time: number, label?: string, color?: string) => void;
@@ -2512,16 +2514,10 @@ export const useProjectStore = create<ProjectState>()(
         );
       },
 
-      /**
-       * Import SRT file and add subtitles to timeline
-       * Parse SRT files using SubtitleEngine
-       */
-      importSRT: (srtContent: string) => {
-        const subtitleEngine = useEngineStore.getState().getSubtitleEngine();
-        if (!subtitleEngine) {
-          console.error("SubtitleEngine not initialized");
-          return { success: false, errors: ["SubtitleEngine not initialized"] };
-        }
+      importSRT: async (srtContent: string) => {
+        const subtitleEngine = await useEngineStore
+          .getState()
+          .getSubtitleEngine();
 
         const { project } = get();
         const { timeline, result } = subtitleEngine.importSRT(
@@ -2539,39 +2535,26 @@ export const useProjectStore = create<ProjectState>()(
           });
           return { success: true, errors: [] };
         } else {
-          // Convert parse errors to string messages
           const errorMessages = result.errors.map(
-            (err) => `Line ${err.line}: ${err.message}`,
+            (err: { line: number; message: string }) =>
+              `Line ${err.line}: ${err.message}`,
           );
           return { success: false, errors: errorMessages };
         }
       },
 
-      /**
-       * Export all subtitles to SRT format
-       * Export SRT files
-       */
-      exportSRT: () => {
-        const subtitleEngine = useEngineStore.getState().getSubtitleEngine();
-        if (!subtitleEngine) {
-          console.error("SubtitleEngine not initialized");
-          return "";
-        }
-
+      exportSRT: async () => {
+        const subtitleEngine = await useEngineStore
+          .getState()
+          .getSubtitleEngine();
         const { project } = get();
         return subtitleEngine.exportSRT(project.timeline);
       },
 
-      /**
-       * Apply a style preset to all subtitles
-       * Apply subtitle style presets
-       */
-      applySubtitleStylePreset: (presetName: string) => {
-        const subtitleEngine = useEngineStore.getState().getSubtitleEngine();
-        if (!subtitleEngine) {
-          console.error("SubtitleEngine not initialized");
-          return false;
-        }
+      applySubtitleStylePreset: async (presetName: string) => {
+        const subtitleEngine = await useEngineStore
+          .getState()
+          .getSubtitleEngine();
 
         const { project } = get();
         const result = subtitleEngine.applyStylePreset(
@@ -2594,15 +2577,10 @@ export const useProjectStore = create<ProjectState>()(
         return true;
       },
 
-      /**
-       * Get available subtitle style presets
-       * Subtitle style presets
-       */
-      getSubtitleStylePresets: () => {
-        const subtitleEngine = useEngineStore.getState().getSubtitleEngine();
-        if (!subtitleEngine) {
-          return [];
-        }
+      getSubtitleStylePresets: async () => {
+        const subtitleEngine = await useEngineStore
+          .getState()
+          .getSubtitleEngine();
         return subtitleEngine.getStylePresets();
       },
 

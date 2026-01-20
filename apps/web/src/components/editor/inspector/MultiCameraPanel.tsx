@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   Video,
   Camera,
@@ -176,11 +176,22 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedClips, setSelectedClips] = useState<string[]>([]);
+  const [multiCamEngine, setMultiCamEngine] =
+    useState<import("@openreel/core").MultiCamEngine | null>(null);
 
-  const multiCamEngine = useMemo(
-    () => getMultiCamEngine?.(),
-    [getMultiCamEngine],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    const loadEngine = async () => {
+      const engine = await getMultiCamEngine();
+      if (!cancelled) {
+        setMultiCamEngine(engine);
+      }
+    };
+    loadEngine();
+    return () => {
+      cancelled = true;
+    };
+  }, [getMultiCamEngine]);
 
   const groups = useMemo(() => {
     return multiCamEngine?.getAllGroups() || [];

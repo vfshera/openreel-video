@@ -61,12 +61,8 @@ export const SaveTemplateDialog: React.FC<SaveTemplateDialogProps> = ({
     setError(null);
 
     try {
-      const templateEngine = getTemplateEngine();
+      const templateEngine = await getTemplateEngine();
       const graphicsEngine = getGraphicsEngine();
-
-      if (!templateEngine) {
-        throw new Error("Template engine not available");
-      }
 
       await templateEngine.initialize();
 

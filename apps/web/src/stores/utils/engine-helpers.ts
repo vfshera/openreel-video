@@ -3,7 +3,11 @@ import { useEngineStore } from "../engine-store";
 type EngineStoreState = ReturnType<typeof useEngineStore.getState>;
 
 type EngineType<K extends keyof EngineStoreState> =
-  EngineStoreState[K] extends () => infer T ? NonNullable<T> : never;
+  EngineStoreState[K] extends () => infer T
+    ? T extends Promise<infer U>
+      ? NonNullable<U>
+      : NonNullable<T>
+    : never;
 
 export function withEngine<T, R>(
   getEngine: () => T | null,
@@ -17,6 +21,15 @@ export function withEngine<T, R>(
     }
     return null;
   }
+  return operation(engine);
+}
+
+export async function withAsyncEngine<T, R>(
+  getEngine: () => Promise<T>,
+  _engineName: string,
+  operation: (engine: T) => R | Promise<R>,
+): Promise<R> {
+  const engine = await getEngine();
   return operation(engine);
 }
 
@@ -40,10 +53,10 @@ export function withGraphicsEngine<R>(
   );
 }
 
-export function withSubtitleEngine<R>(
-  operation: (engine: EngineType<"getSubtitleEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withSubtitleEngine<R>(
+  operation: (engine: EngineType<"getSubtitleEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getSubtitleEngine,
     "SubtitleEngine",
     operation,
@@ -90,80 +103,80 @@ export function withExportEngine<R>(
   );
 }
 
-export function withMaskEngine<R>(
-  operation: (engine: EngineType<"getMaskEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withMaskEngine<R>(
+  operation: (engine: EngineType<"getMaskEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getMaskEngine,
     "MaskEngine",
     operation,
   );
 }
 
-export function withChromaKeyEngine<R>(
-  operation: (engine: EngineType<"getChromaKeyEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withChromaKeyEngine<R>(
+  operation: (engine: EngineType<"getChromaKeyEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getChromaKeyEngine,
     "ChromaKeyEngine",
     operation,
   );
 }
 
-export function withMultiCamEngine<R>(
-  operation: (engine: EngineType<"getMultiCamEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withMultiCamEngine<R>(
+  operation: (engine: EngineType<"getMultiCamEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getMultiCamEngine,
     "MultiCamEngine",
     operation,
   );
 }
 
-export function withTemplateEngine<R>(
-  operation: (engine: EngineType<"getTemplateEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withTemplateEngine<R>(
+  operation: (engine: EngineType<"getTemplateEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getTemplateEngine,
     "TemplateEngine",
     operation,
   );
 }
 
-export function withSoundLibraryEngine<R>(
-  operation: (engine: EngineType<"getSoundLibraryEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withSoundLibraryEngine<R>(
+  operation: (engine: EngineType<"getSoundLibraryEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getSoundLibraryEngine,
     "SoundLibraryEngine",
     operation,
   );
 }
 
-export function withSpeechToTextEngine<R>(
-  operation: (engine: EngineType<"getSpeechToTextEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withSpeechToTextEngine<R>(
+  operation: (engine: EngineType<"getSpeechToTextEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getSpeechToTextEngine,
     "SpeechToTextEngine",
     operation,
   );
 }
 
-export function withNestedSequenceEngine<R>(
-  operation: (engine: EngineType<"getNestedSequenceEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withNestedSequenceEngine<R>(
+  operation: (engine: EngineType<"getNestedSequenceEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getNestedSequenceEngine,
     "NestedSequenceEngine",
     operation,
   );
 }
 
-export function withAdjustmentLayerEngine<R>(
-  operation: (engine: EngineType<"getAdjustmentLayerEngine">) => R,
-): R | null {
-  return withEngine(
+export async function withAdjustmentLayerEngine<R>(
+  operation: (engine: EngineType<"getAdjustmentLayerEngine">) => R | Promise<R>,
+): Promise<R> {
+  return withAsyncEngine(
     useEngineStore.getState().getAdjustmentLayerEngine,
     "AdjustmentLayerEngine",
     operation,

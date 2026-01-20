@@ -40,61 +40,59 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({
     const loadTemplates = async () => {
       setIsLoading(true);
       try {
-        const templateEngine = getTemplateEngine();
-        if (templateEngine) {
-          await templateEngine.initialize();
-          const builtinTemplates = templateEngine.getBuiltinTemplates();
-          const cloudTemplates =
-            await templateCloudService.listScriptableTemplates();
+        const templateEngine = await getTemplateEngine();
+        await templateEngine.initialize();
+        const builtinTemplates = templateEngine.getBuiltinTemplates();
+        const cloudTemplates =
+          await templateCloudService.listScriptableTemplates();
 
-          const allTemplates = [
-            ...(builtinTemplates.map((t) => {
-              const placeholderClipMap = new Map<
-                string,
-                { clipId: string; trackId: string }
-              >();
-              for (const track of t.timeline.tracks) {
-                for (const clip of track.clips) {
-                  const pClip = clip as PlaceholderClip;
-                  if (pClip.isPlaceholder && pClip.placeholderId) {
-                    placeholderClipMap.set(pClip.placeholderId, {
-                      clipId: clip.id,
-                      trackId: track.id,
-                    });
-                  }
+        const allTemplates = [
+          ...(builtinTemplates.map((t) => {
+            const placeholderClipMap = new Map<
+              string,
+              { clipId: string; trackId: string }
+            >();
+            for (const track of t.timeline.tracks) {
+              for (const clip of track.clips) {
+                const pClip = clip as PlaceholderClip;
+                if (pClip.isPlaceholder && pClip.placeholderId) {
+                  placeholderClipMap.set(pClip.placeholderId, {
+                    clipId: clip.id,
+                    trackId: track.id,
+                  });
                 }
               }
+            }
 
-              return {
-                ...t,
-                placeholders: t.placeholders.map((p) => {
-                  const clipInfo = placeholderClipMap.get(p.id);
-                  return {
-                    ...p,
-                    targets: clipInfo
-                      ? [
-                          {
-                            clipId: clipInfo.clipId,
-                            trackId: clipInfo.trackId,
-                            property: "content",
-                          },
-                        ]
-                      : [],
-                    defaultValue: p.defaultValue as unknown,
-                  };
-                }),
-                socialCategory: mapCategoryToSocial(t.category),
-              };
-            }) as ScriptableTemplate[]),
-            ...cloudTemplates,
-          ];
+            return {
+              ...t,
+              placeholders: t.placeholders.map((p) => {
+                const clipInfo = placeholderClipMap.get(p.id);
+                return {
+                  ...p,
+                  targets: clipInfo
+                    ? [
+                        {
+                          clipId: clipInfo.clipId,
+                          trackId: clipInfo.trackId,
+                          property: "content",
+                        },
+                      ]
+                    : [],
+                  defaultValue: p.defaultValue as unknown,
+                };
+              }),
+              socialCategory: mapCategoryToSocial(t.category),
+            };
+          }) as ScriptableTemplate[]),
+          ...cloudTemplates,
+        ];
 
-          const unique = Array.from(
-            new Map(allTemplates.map((t) => [t.id, t])).values(),
-          );
+        const unique = Array.from(
+          new Map(allTemplates.map((t) => [t.id, t])).values(),
+        );
 
-          setTemplates(unique);
-        }
+        setTemplates(unique);
       } catch (error) {
         console.error("Failed to load templates:", error);
       } finally {

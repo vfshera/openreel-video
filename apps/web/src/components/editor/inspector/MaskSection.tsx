@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   Square,
   Circle,
@@ -205,8 +205,22 @@ export const MaskSection: React.FC<MaskSectionProps> = ({ clipId }) => {
   const [selectedMaskId, setSelectedMaskId] = useState<string | null>(null);
   const [expandedMasks, setExpandedMasks] = useState<Set<string>>(new Set());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [maskEngine, setMaskEngine] =
+    useState<import("@openreel/core").MaskEngine | null>(null);
 
-  const maskEngine = useMemo(() => getMaskEngine?.(), [getMaskEngine]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadEngine = async () => {
+      const engine = await getMaskEngine();
+      if (!cancelled) {
+        setMaskEngine(engine);
+      }
+    };
+    loadEngine();
+    return () => {
+      cancelled = true;
+    };
+  }, [getMaskEngine]);
 
   const masks = useMemo(() => {
     if (!maskEngine) return [];
