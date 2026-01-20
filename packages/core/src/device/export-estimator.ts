@@ -213,13 +213,13 @@ export function compareCodecEstimates(
       let speedLabel = "";
 
       if (estimate.seconds < 60) {
-        speedLabel = "⚡ Fast";
+        speedLabel = "Fast";
       } else if (estimate.seconds < 300) {
-        speedLabel = "✓ Good";
+        speedLabel = "Good";
       } else if (estimate.seconds < 900) {
-        speedLabel = "⚠️ Slow";
+        speedLabel = "Slow";
       } else {
-        speedLabel = "🐢 Very slow";
+        speedLabel = "Very slow";
       }
 
       return { codec, estimate, speedLabel };

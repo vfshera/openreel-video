@@ -211,7 +211,7 @@ describe("ExportEstimator", () => {
       const comparisons = compareCodecEstimates(profile, settings);
 
       comparisons.forEach((c) => {
-        expect(c.speedLabel).toMatch(/Fast|Good|Slow|Very slow/i);
+        expect(["Fast", "Good", "Slow", "Very slow"]).toContain(c.speedLabel);
       });
     });
 
