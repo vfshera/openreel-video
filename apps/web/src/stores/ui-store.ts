@@ -121,6 +121,16 @@ export interface UIState {
   setCropMode: (enabled: boolean, clipId?: string) => void;
   setShowWelcomeScreen: (show: boolean) => void;
   setSkipWelcomeScreen: (skip: boolean) => void;
+  exportState: {
+    isExporting: boolean;
+    progress: number;
+    phase: string;
+  };
+  setExportState: (state: {
+    isExporting: boolean;
+    progress: number;
+    phase: string;
+  }) => void;
 }
 
 export interface ContextMenuItem {
@@ -201,6 +211,14 @@ export const useUIStore = create<UIState>()(
 
         showWelcomeScreen: true,
         skipWelcomeScreen: false,
+
+        exportState: {
+          isExporting: false,
+          progress: 0,
+          phase: "",
+        },
+
+        setExportState: (state) => set({ exportState: state }),
 
         select: (item: SelectionItem, addToSelection = false) => {
           const { selectedItems } = get();

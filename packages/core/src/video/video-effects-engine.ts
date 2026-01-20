@@ -967,7 +967,7 @@ export class VideoEffectsEngine {
     effects: Effect[],
   ): Promise<ImageBitmap> {
     const canvas = new OffscreenCanvas(image.width, image.height);
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
     const cssFilters: string[] = [];
     const pixelEffects: Effect[] = [];

@@ -16,6 +16,7 @@ import {
   Maximize2,
   Minimize2,
   Move,
+  Loader2,
 } from "lucide-react";
 import { useProjectStore } from "../../stores/project-store";
 import { useTimelineStore } from "../../stores/timeline-store";
@@ -353,6 +354,7 @@ export const Preview: React.FC = () => {
   const cropMode = useUIStore((state) => state.cropMode);
   const cropClipId = useUIStore((state) => state.cropClipId);
   const setCropMode = useUIStore((state) => state.setCropMode);
+  const exportState = useUIStore((state) => state.exportState);
 
   const {
     playheadPosition,
@@ -4371,6 +4373,48 @@ export const Preview: React.FC = () => {
 
           {/* Processing Overlay */}
           <ProcessingOverlay />
+
+          {/* Export Overlay */}
+          {exportState.isExporting && (
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-background-secondary/95 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-border">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Loader2 size={20} className="text-primary animate-spin" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-text-primary">
+                      Exporting Video
+                    </h3>
+                    <p className="text-xs text-text-muted">
+                      {exportState.phase || "Preparing..."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-text-secondary">
+                      Export Progress
+                    </span>
+                    <span className="text-[10px] text-text-muted font-mono">
+                      {Math.round(exportState.progress)}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-black/30 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-primary to-primary-hover transition-all duration-300"
+                      style={{ width: `${exportState.progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-text-muted text-center">
+                  Please wait while your video is being exported...
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Resize/Transform Overlay */}
           {!cropMode && showResizeHandles && clipBounds && (

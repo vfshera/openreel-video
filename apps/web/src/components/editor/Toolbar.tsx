@@ -57,7 +57,8 @@ interface ExportState {
 
 export const Toolbar: React.FC = () => {
   const { project } = useProjectStore();
-  const { openModal, selectedItems } = useUIStore();
+  const { openModal, selectedItems, setExportState: setGlobalExportState } =
+    useUIStore();
   const { mode: themeMode, toggleTheme } = useThemeStore();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -78,6 +79,14 @@ export const Toolbar: React.FC = () => {
     error: null,
     complete: false,
   });
+
+  useEffect(() => {
+    setGlobalExportState({
+      isExporting: exportState.isExporting,
+      progress: exportState.progress,
+      phase: exportState.phase,
+    });
+  }, [exportState.isExporting, exportState.progress, exportState.phase, setGlobalExportState]);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = useCallback(() => {

@@ -257,15 +257,24 @@ export class VideoEngine {
 
     video.currentTime = time;
     await new Promise<void>((resolve) => {
+      let resolved = false;
       const onSeeked = () => {
+        if (resolved) return;
+        resolved = true;
         video.removeEventListener("seeked", onSeeked);
         resolve();
       };
       video.addEventListener("seeked", onSeeked);
       if (video.readyState >= 3) {
-        video.removeEventListener("seeked", onSeeked);
-        resolve();
+        onSeeked();
       }
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          video.removeEventListener("seeked", onSeeked);
+          resolve();
+        }
+      }, 5000);
     });
 
     const canvas = new OffscreenCanvas(width, height);
