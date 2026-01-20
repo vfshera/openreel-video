@@ -1,4 +1,4 @@
-import type { ExportProgress } from "./types";
+import type { ExportProgress } from "../export/types";
 type FFmpegInstance = {
   load(options?: {
     coreURL?: string;
@@ -100,19 +100,27 @@ export class FFmpegFallback {
 
   private async doLoad(): Promise<void> {
     try {
-      // Dynamic import to support lazy loading
       const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-      this.ffmpeg = new FFmpeg() as unknown as FFmpegInstance;
-      // These files need to be served from the public directory
-      await this.ffmpeg.load({
-        coreURL: "/ffmpeg-core.js",
-        wasmURL: "/ffmpeg-core.wasm",
-        workerURL: "/ffmpeg-core.worker.js",
-      });
+      const { toBlobURL } = await import("@ffmpeg/util");
 
+      this.ffmpeg = new FFmpeg() as unknown as FFmpegInstance;
+
+      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+
+      const [coreURL, wasmURL] = await Promise.all([
+        toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+        toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      ]);
+
+      await this.ffmpeg.load({
+        coreURL,
+        wasmURL,
+      });
       this.loaded = true;
     } catch (error) {
       this.loading = null;
+      console.error("[FFmpeg] Load error:", error);
+
       throw new Error(
         `Failed to load FFmpeg.wasm: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -171,6 +179,8 @@ export class FFmpegFallback {
         currentFrame: 0,
         totalFrames: 0,
         estimatedTimeRemaining,
+        bytesWritten: 0,
+        currentBitrate: 0,
       });
     };
 
@@ -554,6 +564,459 @@ export class FFmpegFallback {
       return new Blob([data.buffer as ArrayBuffer], { type: mimeType });
     } finally {
       await this.cleanupFiles([inputFilename, outputFilename]);
+    }
+  }
+
+  async encodeFrameSequence(
+    frames: AsyncIterable<{ image: ImageBitmap; frameIndex: number }>,
+    options: {
+      width: number;
+      height: number;
+      frameRate: number;
+      totalFrames: number;
+      format?: "mp4" | "webm";
+      videoBitrate?: string;
+      audioBitrate?: string;
+      audioBuffer?: AudioBuffer;
+      writableStream?: FileSystemWritableFileStream;
+    },
+    onProgress?: (progress: ExportProgress) => void,
+  ): Promise<Blob | null> {
+    await this.load();
+    this.ensureLoaded();
+
+    const {
+      width,
+      height,
+      frameRate,
+      totalFrames,
+      format = "mp4",
+      videoBitrate = "10M",
+      audioBitrate = "192k",
+      audioBuffer,
+      writableStream,
+    } = options;
+
+    const outputFilename = `output.${format}`;
+    const tempDir = "frames";
+    let frameCount = 0;
+
+    try {
+      try {
+        await this.ffmpeg!.listDir(tempDir);
+      } catch {
+        await this.ffmpeg!.exec(["-f", "lavfi", "-i", "nullsrc=s=1x1:d=0.001", "-frames:v", "0", "-y", "/dev/null"]);
+      }
+
+      const framePromises: Promise<void>[] = [];
+      const BATCH_SIZE = 10;
+
+      for await (const { image, frameIndex } of frames) {
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(image, 0, 0, width, height);
+
+        const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.95 });
+        const arrayBuffer = await blob.arrayBuffer();
+        const data = new Uint8Array(arrayBuffer);
+
+        const paddedIndex = String(frameIndex).padStart(6, "0");
+        const frameFilename = `frame_${paddedIndex}.jpg`;
+
+        await this.ffmpeg!.writeFile(frameFilename, data);
+        frameCount++;
+
+        image.close();
+
+        if (onProgress) {
+          onProgress({
+            phase: "rendering",
+            progress: frameCount / totalFrames * 0.7,
+            currentFrame: frameCount,
+            totalFrames,
+            estimatedTimeRemaining: 0,
+            bytesWritten: 0,
+            currentBitrate: 0,
+          });
+        }
+
+        if (frameCount % BATCH_SIZE === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      }
+
+      await Promise.all(framePromises);
+
+      let hasAudio = false;
+      if (audioBuffer && audioBuffer.length > 0) {
+        const wavBlob = this.encodeAudioBufferToWav(audioBuffer);
+        const wavData = new Uint8Array(await wavBlob.arrayBuffer());
+        if (wavData.length > 44) {
+          await this.ffmpeg!.writeFile("audio.wav", wavData);
+          hasAudio = true;
+        }
+      }
+
+      if (onProgress) {
+        onProgress({
+          phase: "encoding",
+          progress: 0.7,
+          currentFrame: totalFrames,
+          totalFrames,
+          estimatedTimeRemaining: 0,
+          bytesWritten: 0,
+          currentBitrate: 0,
+        });
+      }
+
+      const ffmpegArgs = [
+        "-framerate", frameRate.toString(),
+        "-i", "frame_%06d.jpg",
+      ];
+
+      if (hasAudio) {
+        ffmpegArgs.push("-i", "audio.wav");
+      }
+
+      ffmpegArgs.push("-threads", "2");
+
+      if (format === "mp4") {
+        ffmpegArgs.push(
+          "-c:v", "libx264",
+          "-preset", "ultrafast",
+          "-crf", "23",
+          "-b:v", videoBitrate,
+          "-pix_fmt", "yuv420p",
+        );
+      } else {
+        ffmpegArgs.push(
+          "-c:v", "libvpx-vp9",
+          "-b:v", videoBitrate,
+          "-deadline", "realtime",
+          "-cpu-used", "8",
+          "-row-mt", "1",
+        );
+      }
+
+      if (hasAudio) {
+        ffmpegArgs.push(
+          "-c:a", format === "mp4" ? "aac" : "libopus",
+          "-b:a", audioBitrate,
+        );
+      }
+
+      ffmpegArgs.push(
+        "-movflags", "+faststart",
+        "-y",
+        outputFilename,
+      );
+
+      this.setupProgressTracking((progress) => {
+        if (onProgress) {
+          onProgress({
+            phase: "encoding",
+            progress: 0.7 + progress.progress * 0.25,
+            currentFrame: totalFrames,
+            totalFrames,
+            estimatedTimeRemaining: progress.estimatedTimeRemaining,
+            bytesWritten: 0,
+            currentBitrate: 0,
+          });
+        }
+      });
+
+      await this.ffmpeg!.exec(ffmpegArgs);
+      this.removeProgressTracking();
+
+      if (onProgress) {
+        onProgress({
+          phase: "muxing",
+          progress: 0.95,
+          currentFrame: totalFrames,
+          totalFrames,
+          estimatedTimeRemaining: 0,
+          bytesWritten: 0,
+          currentBitrate: 0,
+        });
+      }
+
+      const outputData = await this.ffmpeg!.readFile(outputFilename);
+      const mimeType = format === "mp4" ? "video/mp4" : "video/webm";
+
+      if (writableStream) {
+        const CHUNK_SIZE = 4 * 1024 * 1024;
+        const buffer = outputData.buffer as ArrayBuffer;
+        for (let offset = 0; offset < buffer.byteLength; offset += CHUNK_SIZE) {
+          const chunk = new Uint8Array(buffer, offset, Math.min(CHUNK_SIZE, buffer.byteLength - offset));
+          await writableStream.write(chunk);
+        }
+        await writableStream.close();
+
+        if (onProgress) {
+          onProgress({
+            phase: "complete",
+            progress: 1,
+            currentFrame: totalFrames,
+            totalFrames,
+            estimatedTimeRemaining: 0,
+            bytesWritten: buffer.byteLength,
+            currentBitrate: 0,
+          });
+        }
+        return null;
+      }
+
+      if (onProgress) {
+        onProgress({
+          phase: "complete",
+          progress: 1,
+          currentFrame: totalFrames,
+          totalFrames,
+          estimatedTimeRemaining: 0,
+          bytesWritten: outputData.buffer.byteLength,
+          currentBitrate: 0,
+        });
+      }
+
+      return new Blob([outputData.buffer as ArrayBuffer], { type: mimeType });
+    } finally {
+      for (let i = 0; i < frameCount; i++) {
+        const paddedIndex = String(i).padStart(6, "0");
+        try {
+          await this.ffmpeg!.deleteFile(`frame_${paddedIndex}.jpg`);
+        } catch {}
+      }
+      try {
+        await this.ffmpeg!.deleteFile("audio.wav");
+      } catch {}
+      try {
+        await this.ffmpeg!.deleteFile(outputFilename);
+      } catch {}
+    }
+  }
+
+  private encodeAudioBufferToWav(buffer: AudioBuffer): Blob {
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const bitDepth = 16;
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numberOfChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataLength = buffer.length * blockAlign;
+    const headerLength = 44;
+    const totalLength = headerLength + dataLength;
+
+    const arrayBuffer = new ArrayBuffer(totalLength);
+    const view = new DataView(arrayBuffer);
+
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    writeString(0, "RIFF");
+    view.setUint32(4, totalLength - 8, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(36, "data");
+    view.setUint32(40, dataLength, true);
+
+    let offset = 44;
+    for (let i = 0; i < buffer.length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = buffer.getChannelData(channel)[i];
+        const intSample = Math.max(-32768, Math.min(32767, Math.round(sample * 32767)));
+        view.setInt16(offset, intSample, true);
+        offset += bytesPerSample;
+      }
+    }
+
+    return new Blob([arrayBuffer], { type: "audio/wav" });
+  }
+
+  async exportVideoDirectly(
+    inputFile: File | Blob,
+    options: {
+      startTime?: number;
+      endTime?: number;
+      width: number;
+      height: number;
+      frameRate: number;
+      format?: "mp4" | "webm";
+      videoBitrate?: string;
+      audioBitrate?: string;
+      speed?: number;
+      writableStream?: FileSystemWritableFileStream;
+      useStreamCopy?: boolean;
+    },
+    onProgress?: (progress: ExportProgress) => void,
+  ): Promise<Blob | null> {
+    await this.load();
+    this.ensureLoaded();
+
+    const {
+      startTime = 0,
+      endTime,
+      width,
+      height,
+      frameRate,
+      format = "mp4",
+      videoBitrate = "10M",
+      audioBitrate = "192k",
+      speed = 1,
+      writableStream,
+      useStreamCopy = false,
+    } = options;
+
+    const inputFilename = "input_video";
+    const outputFilename = `output.${format}`;
+
+    try {
+      if (onProgress) {
+        onProgress({
+          phase: "preparing",
+          progress: 0.05,
+          currentFrame: 0,
+          totalFrames: 0,
+          estimatedTimeRemaining: 0,
+          bytesWritten: 0,
+          currentBitrate: 0,
+        });
+      }
+
+      const inputData = await this.fileToUint8Array(inputFile);
+      await this.ffmpeg!.writeFile(inputFilename, inputData);
+
+      const ffmpegArgs: string[] = [];
+
+      if (startTime > 0) {
+        ffmpegArgs.push("-ss", startTime.toString());
+      }
+
+      ffmpegArgs.push("-i", inputFilename);
+
+      if (endTime !== undefined && endTime > startTime) {
+        ffmpegArgs.push("-t", (endTime - startTime).toString());
+      }
+
+      const needsReencode = speed !== 1 || !useStreamCopy;
+
+      if (needsReencode) {
+        const scaleFilter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,fps=${frameRate}`;
+
+        if (speed !== 1 && speed > 0) {
+          const videoSpeed = 1 / speed;
+          const audioSpeed = Math.max(0.5, Math.min(2.0, speed));
+          ffmpegArgs.push(
+            "-filter_complex",
+            `[0:v]${scaleFilter},setpts=${videoSpeed}*PTS[v];[0:a]atempo=${audioSpeed}[a]`,
+            "-map", "[v]",
+            "-map", "[a]"
+          );
+        } else {
+          ffmpegArgs.push("-vf", scaleFilter);
+        }
+
+        if (format === "mp4") {
+          ffmpegArgs.push(
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "23",
+            "-b:v", videoBitrate,
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", audioBitrate,
+          );
+        } else {
+          ffmpegArgs.push(
+            "-c:v", "libvpx-vp9",
+            "-b:v", videoBitrate,
+            "-deadline", "realtime",
+            "-cpu-used", "8",
+            "-row-mt", "1",
+            "-c:a", "libopus",
+            "-b:a", audioBitrate,
+          );
+        }
+      } else {
+        ffmpegArgs.push("-c", "copy");
+      }
+
+      ffmpegArgs.push(
+        "-movflags", "+faststart",
+        "-y",
+        outputFilename,
+      );
+
+      this.setupProgressTracking((progress) => {
+        if (onProgress) {
+          onProgress({
+            phase: "encoding",
+            progress: 0.1 + progress.progress * 0.85,
+            currentFrame: 0,
+            totalFrames: 0,
+            estimatedTimeRemaining: progress.estimatedTimeRemaining,
+            bytesWritten: 0,
+            currentBitrate: 0,
+          });
+        }
+      });
+
+      await this.ffmpeg!.exec(ffmpegArgs);
+      this.removeProgressTracking();
+
+      const outputData = await this.ffmpeg!.readFile(outputFilename);
+      const mimeType = format === "mp4" ? "video/mp4" : "video/webm";
+
+      if (writableStream) {
+        const CHUNK_SIZE = 4 * 1024 * 1024;
+        const buffer = outputData.buffer as ArrayBuffer;
+        for (let offset = 0; offset < buffer.byteLength; offset += CHUNK_SIZE) {
+          const chunk = new Uint8Array(buffer, offset, Math.min(CHUNK_SIZE, buffer.byteLength - offset));
+          await writableStream.write(chunk);
+        }
+        await writableStream.close();
+
+        if (onProgress) {
+          onProgress({
+            phase: "complete",
+            progress: 1,
+            currentFrame: 0,
+            totalFrames: 0,
+            estimatedTimeRemaining: 0,
+            bytesWritten: buffer.byteLength,
+            currentBitrate: 0,
+          });
+        }
+        return null;
+      }
+
+      if (onProgress) {
+        onProgress({
+          phase: "complete",
+          progress: 1,
+          currentFrame: 0,
+          totalFrames: 0,
+          estimatedTimeRemaining: 0,
+          bytesWritten: outputData.buffer.byteLength,
+          currentBitrate: 0,
+        });
+      }
+
+      return new Blob([outputData.buffer as ArrayBuffer], { type: mimeType });
+    } finally {
+      try { await this.ffmpeg!.deleteFile(inputFilename); } catch {}
+      try { await this.ffmpeg!.deleteFile(outputFilename); } catch {}
     }
   }
 

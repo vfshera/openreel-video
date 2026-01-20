@@ -232,12 +232,24 @@ export class VideoEngine {
     time: number,
     width: number,
     _height: number,
+    mediaId?: string,
   ): Promise<ImageBitmap | null> {
     try {
       const mediaEngine = getMediaEngine();
       if (!mediaEngine.isAvailable()) {
         await mediaEngine.initialize();
       }
+
+      if (mediaId) {
+        const exportDecoder = mediaEngine.getExportDecoder(mediaId);
+        if (exportDecoder) {
+          const canvas = await exportDecoder.getFrame(time);
+          if (canvas) {
+            return createImageBitmap(canvas);
+          }
+        }
+      }
+
       const result = await mediaEngine.getFrameAtTime(blob, time, width);
       if (result?.canvas) {
         return createImageBitmap(result.canvas);
@@ -431,6 +443,7 @@ export class VideoEngine {
               clipInfo.sourceTime,
               settings.width,
               settings.height,
+              clipInfo.mediaId,
             );
             if (!bitmap) {
               bitmap = await this.decodeFrameWithVideoElement(

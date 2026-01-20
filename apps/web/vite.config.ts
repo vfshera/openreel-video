@@ -15,7 +15,7 @@ export default defineConfig({
     format: "es",
   },
   optimizeDeps: {
-    exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"],
+    exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util", "@ffmpeg/core", "@ffmpeg/core-mt"],
   },
   build: {
     target: "esnext",
@@ -30,7 +30,12 @@ export default defineConfig({
   },
   server: {
     headers: {
-      // Required for SharedArrayBuffer (used by FFmpeg.wasm)
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
+  },
+  preview: {
+    headers: {
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Embedder-Policy": "require-corp",
     },

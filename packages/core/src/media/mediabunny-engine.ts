@@ -65,11 +65,85 @@ type MediaBunnyInput = {
   [Symbol.dispose]?: () => void;
 };
 
+export class ExportFrameDecoder {
+  private input: MediaBunnyInput | null = null;
+  private sink: InstanceType<typeof import("mediabunny").CanvasSink> | null = null;
+  private mediabunny: typeof import("mediabunny");
+  private file: File | Blob;
+  private width?: number;
+  private initialized = false;
+
+  constructor(mediabunny: typeof import("mediabunny"), file: File | Blob, width?: number) {
+    this.mediabunny = mediabunny;
+    this.file = file;
+    this.width = width;
+  }
+
+  async initialize(): Promise<boolean> {
+    if (this.initialized) return true;
+
+    const { Input, ALL_FORMATS, BlobSource, CanvasSink } = this.mediabunny;
+
+    this.input = new Input({
+      source: new BlobSource(this.file),
+      formats: ALL_FORMATS,
+    }) as unknown as MediaBunnyInput;
+
+    const videoTrack = await this.input.getPrimaryVideoTrack();
+    if (!videoTrack) {
+      this.dispose();
+      return false;
+    }
+
+    const canDecode = await videoTrack.canDecode();
+    if (!canDecode) {
+      this.dispose();
+      return false;
+    }
+
+    const sinkOptions: Record<string, unknown> = { poolSize: 2 };
+    if (this.width) {
+      const aspectRatio = videoTrack.displayHeight / videoTrack.displayWidth;
+      sinkOptions.width = this.width;
+      sinkOptions.height = Math.round(this.width * aspectRatio);
+      sinkOptions.fit = "contain";
+    }
+
+    this.sink = new CanvasSink(videoTrack, sinkOptions);
+    this.initialized = true;
+    return true;
+  }
+
+  async getFrame(timestamp: number): Promise<OffscreenCanvas | null> {
+    if (!this.sink) return null;
+
+    const result = await this.sink.getCanvas(timestamp);
+    if (!result) return null;
+
+    const clone = new OffscreenCanvas(result.canvas.width, result.canvas.height);
+    const ctx = clone.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(result.canvas, 0, 0);
+    }
+    return clone;
+  }
+
+  dispose(): void {
+    if (this.input) {
+      this.input[Symbol.dispose]?.();
+      this.input = null;
+    }
+    this.sink = null;
+    this.initialized = false;
+  }
+}
+
 export class MediaBunnyEngine {
   private initialized = false;
   private mediabunny: typeof import("mediabunny") | null = null;
   private frameCache: Map<string, FrameCacheEntry> = new Map();
   private readonly MAX_CACHE_SIZE = 50;
+  private exportDecoders: Map<string, ExportFrameDecoder> = new Map();
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
@@ -94,6 +168,43 @@ export class MediaBunnyEngine {
 
   getFrameCacheSize(): number {
     return this.frameCache.size;
+  }
+
+  async createExportDecoder(mediaId: string, file: File | Blob, width?: number): Promise<ExportFrameDecoder | null> {
+    this.ensureInitialized();
+
+    const existing = this.exportDecoders.get(mediaId);
+    if (existing) {
+      return existing;
+    }
+
+    const decoder = new ExportFrameDecoder(this.mediabunny!, file, width);
+    const success = await decoder.initialize();
+    if (!success) {
+      return null;
+    }
+
+    this.exportDecoders.set(mediaId, decoder);
+    return decoder;
+  }
+
+  getExportDecoder(mediaId: string): ExportFrameDecoder | null {
+    return this.exportDecoders.get(mediaId) || null;
+  }
+
+  disposeExportDecoder(mediaId: string): void {
+    const decoder = this.exportDecoders.get(mediaId);
+    if (decoder) {
+      decoder.dispose();
+      this.exportDecoders.delete(mediaId);
+    }
+  }
+
+  disposeAllExportDecoders(): void {
+    for (const decoder of this.exportDecoders.values()) {
+      decoder.dispose();
+    }
+    this.exportDecoders.clear();
   }
 
   private ensureInitialized(): void {

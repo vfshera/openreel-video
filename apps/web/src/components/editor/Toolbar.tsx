@@ -255,7 +255,66 @@ export const Toolbar: React.FC = () => {
 
           const videoSettings = getExportSettings();
 
-          const generator = engine.exportVideo(project, videoSettings);
+          const getExtension = () => {
+            switch (type) {
+              case "4k-60-master":
+              case "4k-master":
+              case "4k-prores":
+              case "prores":
+              case "project":
+                return "mov";
+              case "gif":
+                return "webm";
+              default:
+                return "mp4";
+            }
+          };
+
+          const getMimeType = () => {
+            const ext = getExtension();
+            switch (ext) {
+              case "mov":
+                return "video/quicktime";
+              case "webm":
+                return "video/webm";
+              default:
+                return "video/mp4";
+            }
+          };
+
+          let writableStream: FileSystemWritableFileStream | undefined;
+          let useStreaming = false;
+
+          if ("showSaveFilePicker" in window && typeof (window as Window & { showSaveFilePicker?: unknown }).showSaveFilePicker === "function") {
+            try {
+              const showSaveFilePicker = (window as Window & { showSaveFilePicker: (options: { suggestedName: string; types: Array<{ description: string; accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+              const fileHandle = await showSaveFilePicker({
+                suggestedName: `${project.name || "export"}.${getExtension()}`,
+                types: [
+                  {
+                    description: "Video file",
+                    accept: { [getMimeType()]: [`.${getExtension()}`] },
+                  },
+                ],
+              });
+              writableStream = await fileHandle.createWritable();
+              useStreaming = true;
+            } catch (e) {
+              if ((e as Error).name === "AbortError") {
+                setExportState({
+                  isExporting: false,
+                  progress: 0,
+                  phase: "",
+                  error: null,
+                  complete: false,
+                });
+                return;
+              }
+              useStreaming = false;
+            }
+          }
+
+          const generator = engine.exportVideoWithFFmpeg(project, videoSettings, writableStream);
           let finalResult: ExportResult | undefined;
 
           while (true) {
@@ -272,29 +331,26 @@ export const Toolbar: React.FC = () => {
             }));
           }
 
-          if (finalResult?.success && finalResult.blob) {
-            const getExtension = () => {
-              switch (type) {
-                case "4k-60-master":
-                case "4k-master":
-                case "4k-prores":
-                case "prores":
-                  return "mov";
-                case "gif":
-                  return "webm";
-                default:
-                  return "mp4";
-              }
-            };
-            downloadBlob(
-              finalResult.blob,
-              `${project.name || "export"}.${getExtension()}`,
-            );
-            setExportState((prev) => ({
-              ...prev,
-              complete: true,
-              phase: "Downloaded!",
-            }));
+          if (finalResult?.success) {
+            if (useStreaming) {
+              setExportState((prev) => ({
+                ...prev,
+                complete: true,
+                phase: "Saved!",
+              }));
+            } else if (finalResult.blob) {
+              downloadBlob(
+                finalResult.blob,
+                `${project.name || "export"}.${getExtension()}`,
+              );
+              setExportState((prev) => ({
+                ...prev,
+                complete: true,
+                phase: "Downloaded!",
+              }));
+            } else {
+              throw new Error("Export completed but no output generated");
+            }
           } else {
             throw new Error(finalResult?.error?.message || "Export failed");
           }
@@ -359,7 +415,57 @@ export const Toolbar: React.FC = () => {
               : undefined,
         };
 
-        const generator = engine.exportVideo(project, exportSettings);
+        const ext =
+          settings.format === "mov"
+            ? "mov"
+            : settings.format === "webm"
+              ? "webm"
+              : "mp4";
+
+        const getMimeType = () => {
+          switch (ext) {
+            case "mov":
+              return "video/quicktime";
+            case "webm":
+              return "video/webm";
+            default:
+              return "video/mp4";
+          }
+        };
+
+        let writableStream: FileSystemWritableFileStream | undefined;
+        let useStreaming = false;
+
+        if ("showSaveFilePicker" in window && typeof (window as Window & { showSaveFilePicker?: unknown }).showSaveFilePicker === "function") {
+          try {
+            const showSaveFilePicker = (window as Window & { showSaveFilePicker: (options: { suggestedName: string; types: Array<{ description: string; accept: Record<string, string[]> }> }) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
+            const fileHandle = await showSaveFilePicker({
+              suggestedName: `${project.name || "export"}.${ext}`,
+              types: [
+                {
+                  description: "Video file",
+                  accept: { [getMimeType()]: [`.${ext}`] },
+                },
+              ],
+            });
+            writableStream = await fileHandle.createWritable();
+            useStreaming = true;
+          } catch (e) {
+            if ((e as Error).name === "AbortError") {
+              setExportState({
+                isExporting: false,
+                progress: 0,
+                phase: "",
+                error: null,
+                complete: false,
+              });
+              return;
+            }
+            useStreaming = false;
+          }
+        }
+
+        const generator = engine.exportVideoWithFFmpeg(project, exportSettings, writableStream);
         let finalResult: ExportResult | undefined;
 
         while (true) {
@@ -376,19 +482,23 @@ export const Toolbar: React.FC = () => {
           }));
         }
 
-        if (finalResult?.success && finalResult.blob) {
-          const ext =
-            settings.format === "mov"
-              ? "mov"
-              : settings.format === "webm"
-                ? "webm"
-                : "mp4";
-          downloadBlob(finalResult.blob, `${project.name || "export"}.${ext}`);
-          setExportState((prev) => ({
-            ...prev,
-            complete: true,
-            phase: "Downloaded!",
-          }));
+        if (finalResult?.success) {
+          if (useStreaming) {
+            setExportState((prev) => ({
+              ...prev,
+              complete: true,
+              phase: "Saved!",
+            }));
+          } else if (finalResult.blob) {
+            downloadBlob(finalResult.blob, `${project.name || "export"}.${ext}`);
+            setExportState((prev) => ({
+              ...prev,
+              complete: true,
+              phase: "Downloaded!",
+            }));
+          } else {
+            throw new Error("Export completed but no output generated");
+          }
         } else {
           throw new Error(finalResult?.error?.message || "Export failed");
         }

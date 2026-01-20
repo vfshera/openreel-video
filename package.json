@@ -49,6 +49,8 @@
   },
   "packageManager": "pnpm@9.0.0",
   "dependencies": {
+    "@ffmpeg/core": "0.12.6",
+    "@ffmpeg/core-mt": "0.12.6",
     "mediabunny": "^1.25.3"
   }
 }

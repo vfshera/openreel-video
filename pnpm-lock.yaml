@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@ffmpeg/core':
+        specifier: 0.12.6
+        version: 0.12.6
+      '@ffmpeg/core-mt':
+        specifier: 0.12.6
+        version: 0.12.6
       mediabunny:
         specifier: ^1.25.3
         version: 1.25.3
@@ -925,6 +931,14 @@ packages:
   '@fastify/busboy@2.1.1':
     resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
     engines: {node: '>=14'}
+
+  '@ffmpeg/core-mt@0.12.6':
+    resolution: {integrity: sha512-f7wrOeUk24VFRi2Gfsp/mwwkK1hbDV0ajgm2fOU/oRi+IDullyzAYdHOagAWfpSZXcTPAGZ1Ild7HmBwr3k2tg==}
+    engines: {node: '>=16.x'}
+
+  '@ffmpeg/core@0.12.6':
+    resolution: {integrity: sha512-PrjWBTfGn2WVn9T7wGnzfFwChbqWeZc7tM9vvJZVRadYFUDakfzy7W0LpYC0cvvK0xT82qlBsk38lQhJ/Hps5A==}
+    engines: {node: '>=16.x'}
 
   '@ffmpeg/ffmpeg@0.12.15':
     resolution: {integrity: sha512-1C8Obr4GsN3xw+/1Ww6PFM84wSQAGsdoTuTWPOj2OizsRDLT4CXTaVjPhkw6ARyDus1B9X/L2LiXHqYYsGnRFw==}
@@ -4068,6 +4082,10 @@ snapshots:
       levn: 0.4.1
 
   '@fastify/busboy@2.1.1': {}
+
+  '@ffmpeg/core-mt@0.12.6': {}
+
+  '@ffmpeg/core@0.12.6': {}
 
   '@ffmpeg/ffmpeg@0.12.15':
     dependencies:
