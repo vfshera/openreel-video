@@ -1869,6 +1869,77 @@ export const Preview: React.FC = () => {
         if (!activeClip) {
           ctx.fillStyle = "#000000";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          const sortedImageClipsNoVideo = [...imageClips].sort(
+            (a, b) => b.trackIndex - a.trackIndex,
+          );
+          for (const { clip: imgClip } of sortedImageClipsNoVideo) {
+            if (
+              currentPlayhead >= imgClip.startTime &&
+              currentPlayhead < imgClip.startTime + imgClip.duration
+            ) {
+              const bitmap = imageBitmapCache.get(imgClip.id);
+              if (bitmap) {
+                const latestImgClip = (() => {
+                  for (const track of timelineTracksRef.current) {
+                    const found = track.clips.find((c) => c.id === imgClip.id);
+                    if (found) return found;
+                  }
+                  return imgClip;
+                })();
+                const imgClipLocalTime = currentPlayhead - imgClip.startTime;
+                const imgTransform = getAnimatedTransform(
+                  (latestImgClip.transform as ClipTransform) || DEFAULT_TRANSFORM,
+                  latestImgClip.keyframes,
+                  imgClipLocalTime,
+                );
+                drawFrameWithTransform(
+                  ctx,
+                  bitmap,
+                  imgTransform,
+                  canvas.width,
+                  canvas.height,
+                );
+              }
+            }
+          }
+
+          const activeShapeClipsNoVideo = getActiveShapeClips(
+            allShapeClipsRef.current,
+            currentPlayhead,
+          );
+          const activeTextClipsNoVideo = getActiveTextClips(
+            allTextClipsRef.current,
+            currentPlayhead,
+          );
+
+          if (activeShapeClipsNoVideo.length > 0 || activeTextClipsNoVideo.length > 0) {
+            renderOverlayClipsInTrackOrder(
+              ctx,
+              timelineTracksRef.current,
+              activeShapeClipsNoVideo,
+              activeTextClipsNoVideo,
+              currentPlayhead,
+              canvas.width,
+              canvas.height,
+              "all",
+            );
+          }
+
+          const activeSubtitlesNoVideo = getActiveSubtitles(
+            allSubtitles,
+            currentPlayhead,
+          );
+          for (const subtitle of activeSubtitlesNoVideo) {
+            renderSubtitleToCanvas(
+              ctx,
+              subtitle,
+              canvas.width,
+              canvas.height,
+              currentPlayhead,
+            );
+          }
+
           setPlayheadPosition(currentPlayhead);
           rafId = requestAnimationFrame(() => { drawFrame(); });
           return;
