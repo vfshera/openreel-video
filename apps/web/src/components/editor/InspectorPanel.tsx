@@ -304,8 +304,12 @@ export const InspectorPanel: React.FC = () => {
     forceUpdate();
   }, [selectedClip]);
 
+  const [isEnhancingAudio, setIsEnhancingAudio] = useState(false);
+  const [audioEnhanced, setAudioEnhanced] = useState(false);
+
   const handleEnhanceAudio = useCallback(async () => {
     if (!selectedClip) return;
+    setIsEnhancingAudio(true);
     try {
       await initializeAudioBridgeEffects();
       const bridge = getAudioBridgeEffects();
@@ -318,17 +322,24 @@ export const InspectorPanel: React.FC = () => {
         if (i === 4) gain = -2;
         return { ...band, gain };
       });
-      bridge.applyEQ(selectedClip.id, speechEQBands);
-      bridge.applyCompressor(selectedClip.id, {
+      const eqResult = bridge.applyEQ(selectedClip.id, speechEQBands);
+      const compResult = bridge.applyCompressor(selectedClip.id, {
         threshold: -18,
         ratio: 3,
         attack: 0.005,
         release: 0.15,
       });
+      if (eqResult.success && compResult.success) {
+        setAudioEnhanced(true);
+        setTimeout(() => setAudioEnhanced(false), 2000);
+      }
+      forceUpdate();
     } catch (error) {
       console.error("Failed to enhance audio:", error);
+    } finally {
+      setIsEnhancingAudio(false);
     }
-  }, [selectedClip]);
+  }, [selectedClip, forceUpdate]);
 
   const handleAutoColor = useCallback(() => {
     if (!selectedClip) return;
@@ -1023,9 +1034,25 @@ export const InspectorPanel: React.FC = () => {
                   {showAudioEffects && (
                     <button
                       onClick={handleEnhanceAudio}
-                      className="w-full py-2 bg-background-tertiary hover:bg-primary hover:text-black border border-border hover:border-primary rounded-lg text-[10px] transition-all"
+                      disabled={isEnhancingAudio}
+                      className={`w-full py-2 border rounded-lg text-[10px] transition-all flex items-center justify-center gap-1.5 ${
+                        audioEnhanced
+                          ? "bg-green-500/20 border-green-500 text-green-400"
+                          : isEnhancingAudio
+                            ? "bg-background-tertiary border-border text-text-muted cursor-not-allowed"
+                            : "bg-background-tertiary hover:bg-primary hover:text-black border-border hover:border-primary"
+                      }`}
                     >
-                      Enhance Audio
+                      {isEnhancingAudio ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          Enhancing...
+                        </>
+                      ) : audioEnhanced ? (
+                        "✓ Enhanced"
+                      ) : (
+                        "Enhance Audio"
+                      )}
                     </button>
                   )}
                   {showVideoEffects && (

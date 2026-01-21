@@ -1,6 +1,6 @@
 import React from "react";
-import { Copy, Clipboard, Trash2, Scissors } from "lucide-react";
-import type { Clip } from "@openreel/core";
+import { Copy, Clipboard, Trash2, Scissors, Music } from "lucide-react";
+import type { Clip, Track } from "@openreel/core";
 import { useProjectStore } from "../../../stores/project-store";
 import { useTimelineStore } from "../../../stores/timeline-store";
 import {
@@ -12,20 +12,36 @@ import {
 
 interface ClipContextMenuProps {
   clip: Clip;
+  track: Track;
   onClose?: () => void;
 }
 
 export const ClipContextMenu: React.FC<ClipContextMenuProps> = ({
   clip,
+  track,
   onClose,
 }) => {
-  const { copyClips, duplicateClip, removeClip, rippleDeleteClip, splitClip } =
-    useProjectStore();
+  const {
+    copyClips,
+    duplicateClip,
+    removeClip,
+    rippleDeleteClip,
+    splitClip,
+    separateAudio,
+    getMediaItem,
+  } = useProjectStore();
   const { playheadPosition } = useTimelineStore();
 
   const isPlayheadOnClip =
     playheadPosition >= clip.startTime &&
     playheadPosition <= clip.startTime + clip.duration;
+
+  const mediaItem = getMediaItem(clip.mediaId);
+  const isVideoWithAudio =
+    track.type === "video" &&
+    mediaItem?.type === "video" &&
+    mediaItem?.metadata?.channels &&
+    mediaItem.metadata.channels > 0;
 
   const handleCopy = () => {
     copyClips([clip.id]);
@@ -51,6 +67,11 @@ export const ClipContextMenu: React.FC<ClipContextMenuProps> = ({
     if (isPlayheadOnClip) {
       await splitClip(clip.id, playheadPosition);
     }
+    onClose?.();
+  };
+
+  const handleSeparateAudio = async () => {
+    await separateAudio(clip.id);
     onClose?.();
   };
 
@@ -81,6 +102,15 @@ export const ClipContextMenu: React.FC<ClipContextMenuProps> = ({
         Split at Playhead
         <ContextMenuShortcut>S</ContextMenuShortcut>
       </ContextMenuItem>
+      {isVideoWithAudio && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={handleSeparateAudio}>
+            <Music className="mr-2 h-4 w-4" />
+            Separate Audio
+          </ContextMenuItem>
+        </>
+      )}
     </ContextMenuContent>
   );
 };

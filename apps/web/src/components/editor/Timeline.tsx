@@ -637,22 +637,7 @@ export const Timeline: React.FC = () => {
     [tracks],
   );
 
-  const textTracks = tracks.filter((t) => t.type === "text");
-  const graphicsTracks = tracks.filter((t) => t.type === "graphics");
-  const videoTracks = tracks.filter((t) => t.type === "video");
-  const imageTracks = tracks.filter((t) => t.type === "image");
-  const audioTracks = tracks.filter((t) => t.type === "audio");
-
-  const visualOrderTracks = useMemo(
-    () => [
-      ...textTracks,
-      ...graphicsTracks,
-      ...videoTracks,
-      ...imageTracks,
-      ...audioTracks,
-    ],
-    [textTracks, graphicsTracks, videoTracks, imageTracks, audioTracks],
-  );
+  const visualOrderTracks = useMemo(() => tracks, [tracks]);
 
   return (
     <div className="h-full bg-background border-t border-border flex flex-col">
@@ -874,63 +859,7 @@ export const Timeline: React.FC = () => {
               className="flex flex-col"
               style={{ transform: `translateY(-${scrollY}px)` }}
             >
-              {textTracks.map((track, i) => (
-                <div
-                  key={track.id}
-                  className={draggedTrackId === track.id ? "opacity-50" : ""}
-                >
-                  <TrackHeader
-                    track={track}
-                    index={i}
-                    onDragStart={handleTrackDragStart}
-                    onDragOver={handleTrackDragOver}
-                    onDrop={handleTrackDrop}
-                  />
-                </div>
-              ))}
-              {graphicsTracks.map((track, i) => (
-                <div
-                  key={track.id}
-                  className={draggedTrackId === track.id ? "opacity-50" : ""}
-                >
-                  <TrackHeader
-                    track={track}
-                    index={i}
-                    onDragStart={handleTrackDragStart}
-                    onDragOver={handleTrackDragOver}
-                    onDrop={handleTrackDrop}
-                  />
-                </div>
-              ))}
-              {videoTracks.map((track, i) => (
-                <div
-                  key={track.id}
-                  className={draggedTrackId === track.id ? "opacity-50" : ""}
-                >
-                  <TrackHeader
-                    track={track}
-                    index={i}
-                    onDragStart={handleTrackDragStart}
-                    onDragOver={handleTrackDragOver}
-                    onDrop={handleTrackDrop}
-                  />
-                </div>
-              ))}
-              {imageTracks.map((track, i) => (
-                <div
-                  key={track.id}
-                  className={draggedTrackId === track.id ? "opacity-50" : ""}
-                >
-                  <TrackHeader
-                    track={track}
-                    index={i}
-                    onDragStart={handleTrackDragStart}
-                    onDragOver={handleTrackDragOver}
-                    onDrop={handleTrackDrop}
-                  />
-                </div>
-              ))}
-              {audioTracks.map((track, i) => (
+              {visualOrderTracks.map((track, i) => (
                 <div
                   key={track.id}
                   className={draggedTrackId === track.id ? "opacity-50" : ""}
@@ -966,7 +895,7 @@ export const Timeline: React.FC = () => {
               style={{ width: `${timelineDuration * pixelsPerSecond}px` }}
               className="min-w-full"
             >
-              {textTracks.map((track) => (
+              {visualOrderTracks.map((track) => (
                 <TrackLane
                   key={track.id}
                   track={track}
@@ -981,105 +910,13 @@ export const Timeline: React.FC = () => {
                   onDropMedia={handleDropMedia}
                   onMoveClip={handleMoveClip}
                   onSnapIndicator={handleSnapIndicator}
-                  onTrimTextClip={handleTrimTextClip}
-                  onMoveTextClip={handleMoveTextClip}
-                  onTrimShapeClip={handleTrimShapeClip}
-                  scrollX={scrollX}
-                  trackHeight={getTrackHeight(track.id)}
-                  onResizeTrack={setTrackHeightById}
-                />
-              ))}
-
-              {graphicsTracks.map((track) => (
-                <TrackLane
-                  key={track.id}
-                  track={track}
-                  allTracks={visualOrderTracks}
-                  pixelsPerSecond={pixelsPerSecond}
-                  selectedClipIds={selectedClipIds}
-                  textClips={getTextClipsForTrack(track.id)}
-                  shapeClips={getShapeClipsForTrack(track.id)}
-                  trackHeights={trackHeightsMap}
-                  timelineRef={tracksRef}
-                  onSelectClip={handleSelectClip}
-                  onDropMedia={handleDropMedia}
-                  onMoveClip={handleMoveClip}
-                  onSnapIndicator={handleSnapIndicator}
-                  onTrimTextClip={handleTrimTextClip}
-                  onMoveTextClip={handleMoveTextClip}
-                  onTrimShapeClip={handleTrimShapeClip}
-                  scrollX={scrollX}
-                  trackHeight={getTrackHeight(track.id)}
-                  onResizeTrack={setTrackHeightById}
-                />
-              ))}
-
-              {videoTracks.map((track) => (
-                <TrackLane
-                  key={track.id}
-                  track={track}
-                  allTracks={visualOrderTracks}
-                  pixelsPerSecond={pixelsPerSecond}
-                  selectedClipIds={selectedClipIds}
-                  textClips={getTextClipsForTrack(track.id)}
-                  shapeClips={getShapeClipsForTrack(track.id)}
-                  trackHeights={trackHeightsMap}
-                  timelineRef={tracksRef}
-                  onSelectClip={handleSelectClip}
-                  onDropMedia={handleDropMedia}
-                  onMoveClip={handleMoveClip}
-                  onSnapIndicator={handleSnapIndicator}
-                  onTrimClip={handleTrimClip}
-                  onTrimTextClip={handleTrimTextClip}
-                  onMoveTextClip={handleMoveTextClip}
-                  onTrimShapeClip={handleTrimShapeClip}
-                  scrollX={scrollX}
-                  trackHeight={getTrackHeight(track.id)}
-                  onResizeTrack={setTrackHeightById}
-                />
-              ))}
-
-              {imageTracks.map((track) => (
-                <TrackLane
-                  key={track.id}
-                  track={track}
-                  allTracks={visualOrderTracks}
-                  pixelsPerSecond={pixelsPerSecond}
-                  selectedClipIds={selectedClipIds}
-                  textClips={getTextClipsForTrack(track.id)}
-                  shapeClips={getShapeClipsForTrack(track.id)}
-                  trackHeights={trackHeightsMap}
-                  timelineRef={tracksRef}
-                  onSelectClip={handleSelectClip}
-                  onDropMedia={handleDropMedia}
-                  onMoveClip={handleMoveClip}
-                  onSnapIndicator={handleSnapIndicator}
-                  onTrimClip={handleTrimClip}
-                  onTrimTextClip={handleTrimTextClip}
-                  onMoveTextClip={handleMoveTextClip}
-                  onTrimShapeClip={handleTrimShapeClip}
-                  scrollX={scrollX}
-                  trackHeight={getTrackHeight(track.id)}
-                  onResizeTrack={setTrackHeightById}
-                />
-              ))}
-
-              {audioTracks.map((track) => (
-                <TrackLane
-                  key={track.id}
-                  track={track}
-                  allTracks={visualOrderTracks}
-                  pixelsPerSecond={pixelsPerSecond}
-                  selectedClipIds={selectedClipIds}
-                  textClips={getTextClipsForTrack(track.id)}
-                  shapeClips={getShapeClipsForTrack(track.id)}
-                  trackHeights={trackHeightsMap}
-                  timelineRef={tracksRef}
-                  onSelectClip={handleSelectClip}
-                  onDropMedia={handleDropMedia}
-                  onMoveClip={handleMoveClip}
-                  onSnapIndicator={handleSnapIndicator}
-                  onTrimClip={handleTrimClip}
+                  onTrimClip={
+                    track.type === "video" ||
+                    track.type === "image" ||
+                    track.type === "audio"
+                      ? handleTrimClip
+                      : undefined
+                  }
                   onTrimTextClip={handleTrimTextClip}
                   onMoveTextClip={handleMoveTextClip}
                   onTrimShapeClip={handleTrimShapeClip}

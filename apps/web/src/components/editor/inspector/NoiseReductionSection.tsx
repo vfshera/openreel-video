@@ -124,39 +124,39 @@ export const NoiseReductionSection: React.FC<NoiseReductionSectionProps> = ({
 
     try {
       const bridge = getAudioBridgeEffects();
+      const project = useProjectStore.getState().project;
 
-      // In a real implementation, we would get the audio buffer from the clip
-      // For now, we'll create a mock audio buffer for demonstration
-      // This would typically come from the MediaBridge or AudioEngine
-      const audioContext = new AudioContext();
-      const sampleRate = audioContext.sampleRate;
-      const duration = 1; // 1 second of noise sample
-      const buffer = audioContext.createBuffer(
-        1,
-        sampleRate * duration,
-        sampleRate,
-      );
+      const clip = project.timeline.tracks
+        .flatMap((track) => track.clips)
+        .find((c) => c.id === clipId);
 
-      // Fill with simulated noise (in real implementation, this would be actual audio data)
-      const channelData = buffer.getChannelData(0);
-      for (let i = 0; i < channelData.length; i++) {
-        channelData[i] = (Math.random() * 2 - 1) * 0.1; // Low-level noise
+      if (!clip) {
+        throw new Error("Clip not found");
       }
 
-      // Learn the noise profile
+      const mediaItem = project.mediaLibrary.items.find(
+        (m) => m.id === clip.mediaId,
+      );
+
+      if (!mediaItem?.blob) {
+        throw new Error("No audio data available for this clip");
+      }
+
+      const audioContext = new AudioContext();
+      const arrayBuffer = await mediaItem.blob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
       const profile = await bridge.learnNoiseProfile(
-        buffer,
+        audioBuffer,
         `profile-${clipId}`,
       );
       setNoiseProfile(profile);
       setLearningState("success");
 
-      // Auto-enable noise reduction after learning
       if (!enabled) {
         handleToggle(true);
       }
 
-      // Reset success state after 2 seconds
       setTimeout(() => {
         setLearningState("idle");
       }, 2000);
@@ -170,7 +170,6 @@ export const NoiseReductionSection: React.FC<NoiseReductionSectionProps> = ({
           : "Failed to learn noise profile",
       );
 
-      // Reset error state after 3 seconds
       setTimeout(() => {
         setLearningState("idle");
         setErrorMessage(null);

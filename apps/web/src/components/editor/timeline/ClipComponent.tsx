@@ -400,7 +400,7 @@ export const ClipComponent: React.FC<ClipComponentProps> = ({
 
         </div>
       </ContextMenuTrigger>
-      <ClipContextMenu clip={clip} />
+      <ClipContextMenu clip={clip} track={track} />
     </ContextMenu>
   );
 };

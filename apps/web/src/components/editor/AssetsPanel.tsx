@@ -475,20 +475,7 @@ export const AssetsPanel: React.FC = () => {
         }
       }
 
-      const result = await addClip(targetTrack.id, item.id, startTime);
-
-      if (
-        item.type === "video" &&
-        item.metadata?.channels &&
-        item.metadata.channels > 0
-      ) {
-        const updatedTracks =
-          useProjectStore.getState().project.timeline.tracks;
-        const audioTrack = updatedTracks.find((t) => t.type === "audio");
-        if (audioTrack && result.success && result.actionId) {
-          await addClip(audioTrack.id, item.id, startTime);
-        }
-      }
+      await addClip(targetTrack.id, item.id, startTime);
     } else {
       console.error(
         "AssetsPanel: No suitable track found for media type:",

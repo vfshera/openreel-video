@@ -118,12 +118,20 @@ export class PlaybackBridge {
    * Set up subscription to project changes
    */
   private setupProjectSubscription(): void {
-    // Subscribe to project changes to update the playback controller
     this.unsubscribeTimelineStore = useProjectStore.subscribe(
       (state) => state.project,
       (project) => {
         if (this.playbackController) {
+          const timelineStore = useTimelineStore.getState();
+          const currentTime = timelineStore.playheadPosition;
+          const wasPlaying = timelineStore.playbackState === "playing";
+
           this.playbackController.setProject(project);
+
+          this.playbackController.scrubTo(currentTime);
+          if (wasPlaying) {
+            this.playbackController.play();
+          }
         }
       },
     );

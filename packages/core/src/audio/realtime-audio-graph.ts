@@ -457,8 +457,10 @@ export class RealtimeAudioGraph {
   }
 
   scheduleClip(schedule: AudioClipSchedule): void {
-    const nodes = this.trackNodes.get(schedule.trackId);
-    if (!nodes) {
+    const existingNodes = this.trackNodes.get(schedule.trackId);
+    const existingConfig = this.trackConfigs.get(schedule.trackId);
+
+    if (!existingNodes) {
       this.createTrack({
         trackId: schedule.trackId,
         volume: schedule.volume,
@@ -467,6 +469,12 @@ export class RealtimeAudioGraph {
         solo: false,
         effects: schedule.effects,
       });
+    } else if (
+      existingConfig &&
+      JSON.stringify(existingConfig.effects) !==
+        JSON.stringify(schedule.effects)
+    ) {
+      this.updateTrackEffects(schedule.trackId, schedule.effects);
     }
 
     const trackNodes = this.trackNodes.get(schedule.trackId);

@@ -825,18 +825,24 @@ export const Preview: React.FC = () => {
     const audioContext = audioGraph.getAudioContext();
 
     const allTracks = [...audioTracks, ...videoTracks];
+
     for (const track of allTracks) {
       for (const clip of track.clips) {
-        if (audioBufferCacheRef.current.has(clip.mediaId)) continue;
+        if (audioBufferCacheRef.current.has(clip.mediaId)) {
+          continue;
+        }
 
         const mediaItem = getMediaItem(clip.mediaId);
-        if (!mediaItem?.blob) continue;
+        if (!mediaItem?.blob) {
+          continue;
+        }
 
         try {
           const arrayBuffer = await mediaItem.blob.arrayBuffer();
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
           audioBufferCacheRef.current.set(clip.mediaId, audioBuffer);
-        } catch {}
+        } catch {
+        }
       }
     }
   }, [getMediaItem]);
@@ -844,19 +850,23 @@ export const Preview: React.FC = () => {
   const getAudioClipsForScheduler = useCallback(
     (time: number): AudioClipSchedule[] => {
       const tracks = timelineTracksRef.current;
-      const audioTracks = tracks.filter(
-        (t) => t.type === "audio" && !t.hidden && !t.muted,
+      const tracksWithAudio = tracks.filter(
+        (t) => (t.type === "audio" || t.type === "video") && !t.hidden && !t.muted,
       );
       const schedules: AudioClipSchedule[] = [];
       const projectStore = useProjectStore.getState();
 
-      for (const track of audioTracks) {
+      for (const track of tracksWithAudio) {
         for (const clip of track.clips) {
           const clipEnd = clip.startTime + clip.duration;
-          if (clipEnd <= time || clip.startTime > time + 1) continue;
+          if (clipEnd <= time || clip.startTime > time + 1) {
+            continue;
+          }
 
           const audioBuffer = audioBufferCacheRef.current.get(clip.mediaId);
-          if (!audioBuffer) continue;
+          if (!audioBuffer) {
+            continue;
+          }
 
           const clipData = projectStore.getClip(clip.id);
           const audioEffects = (clipData?.audioEffects || []).filter(
@@ -1754,10 +1764,10 @@ export const Preview: React.FC = () => {
       const audioGraph = audioGraphRef.current;
       audioGraph.setMasterVolume(isMuted ? 0 : 1);
 
-      const allAudioTracks = timelineTracks.filter(
-        (t) => t.type === "audio" && !t.hidden,
+      const tracksWithAudio = timelineTracks.filter(
+        (t) => (t.type === "audio" || t.type === "video") && !t.hidden,
       );
-      for (const audioTrack of allAudioTracks) {
+      for (const audioTrack of tracksWithAudio) {
         audioGraph.createTrack({
           trackId: audioTrack.id,
           volume: 1,
@@ -1770,16 +1780,21 @@ export const Preview: React.FC = () => {
 
       await audioGraph.resume();
       audioGraph.startScheduler(() => {
-        const audioTracks = timelineTracks.filter(
-          (t) => t.type === "audio" && !t.hidden,
+        const tracksWithAudio = timelineTracks.filter(
+          (t) => (t.type === "audio" || t.type === "video") && !t.hidden,
         );
         const schedules: AudioClipSchedule[] = [];
-        for (const track of audioTracks) {
+        for (const track of tracksWithAudio) {
           for (const audioClip of track.clips) {
-            const audioItem = getMediaItem(audioClip.mediaId);
-            const audioBuffer = audioItem
-              ? audioBufferCacheRef.current.get(audioClip.mediaId)
-              : undefined;
+            const mediaItem = getMediaItem(audioClip.mediaId);
+            const hasAudio =
+              mediaItem?.type === "audio" ||
+              (mediaItem?.type === "video" &&
+                mediaItem?.metadata?.channels &&
+                mediaItem.metadata.channels > 0);
+            if (!hasAudio) continue;
+
+            const audioBuffer = audioBufferCacheRef.current.get(audioClip.mediaId);
             if (audioBuffer) {
               schedules.push({
                 clipId: audioClip.id,
@@ -2609,16 +2624,16 @@ export const Preview: React.FC = () => {
       const audioGraph = audioGraphRef.current;
       audioGraph.setMasterVolume(isMuted ? 0 : 1);
 
-      const allAudioTracks = timelineTracksRef.current.filter(
-        (t) => t.type === "audio" && !t.hidden,
+      const tracksWithAudio = timelineTracksRef.current.filter(
+        (t) => (t.type === "audio" || t.type === "video") && !t.hidden,
       );
-      for (const audioTrack of allAudioTracks) {
+      for (const track of tracksWithAudio) {
         audioGraph.createTrack({
-          trackId: audioTrack.id,
+          trackId: track.id,
           volume: 1,
           pan: 0,
-          muted: audioTrack.muted || false,
-          solo: audioTrack.solo || false,
+          muted: track.muted || false,
+          solo: track.solo || false,
           effects: [],
         });
       }
