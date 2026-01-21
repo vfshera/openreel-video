@@ -266,11 +266,12 @@ export function ShapeSection({ layer }: Props) {
             <label className="text-xs font-medium">Corner Radius</label>
             <button
               onClick={() => {
-                const currentRadius = layer.shapeStyle.cornerRadius;
+                const currentRadius = layer.shapeStyle.cornerRadius ?? 0;
+                const defaultCorners = { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 };
                 handleStyleChange({
                   individualCorners: !layer.shapeStyle.individualCorners,
                   corners: layer.shapeStyle.individualCorners
-                    ? layer.shapeStyle.corners
+                    ? (layer.shapeStyle.corners ?? defaultCorners)
                     : {
                         topLeft: currentRadius,
                         topRight: currentRadius,

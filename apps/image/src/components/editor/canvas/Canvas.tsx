@@ -485,7 +485,9 @@ function renderLayer(
   layer: Layer,
   project: { assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
 ) {
-  const { transform, shadow, glow } = layer;
+  const { transform } = layer;
+  const shadow = layer.shadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 0, offsetY: 4 };
+  const glow = layer.glow ?? { enabled: false, color: '#ffffff', blur: 20, intensity: 1 };
 
   ctx.save();
   ctx.translate(transform.x, transform.y);
@@ -496,7 +498,7 @@ function renderLayer(
   if (glow.enabled && glow.blur > 0) {
     ctx.save();
     ctx.shadowColor = glow.color;
-    ctx.shadowBlur = glow.blur * glow.intensity;
+    ctx.shadowBlur = glow.blur * (glow.intensity ?? 1);
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
@@ -737,11 +739,12 @@ function renderTextLayer(ctx: CanvasRenderingContext2D, layer: TextLayer) {
     }
   }
 
-  if (style.textShadow?.enabled) {
-    ctx.shadowColor = style.textShadow.color;
-    ctx.shadowBlur = style.textShadow.blur;
-    ctx.shadowOffsetX = style.textShadow.offsetX;
-    ctx.shadowOffsetY = style.textShadow.offsetY;
+  const textShadow = style.textShadow;
+  if (textShadow?.enabled) {
+    ctx.shadowColor = textShadow.color ?? 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = textShadow.blur ?? 4;
+    ctx.shadowOffsetX = textShadow.offsetX ?? 0;
+    ctx.shadowOffsetY = textShadow.offsetY ?? 2;
   }
 
   lines.forEach((line, i) => {
@@ -759,7 +762,7 @@ function renderTextLayer(ctx: CanvasRenderingContext2D, layer: TextLayer) {
     ctx.fillText(line, textX, y);
   });
 
-  if (style.textShadow?.enabled) {
+  if (textShadow?.enabled) {
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;

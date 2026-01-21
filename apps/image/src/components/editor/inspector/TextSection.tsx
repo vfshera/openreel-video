@@ -441,20 +441,20 @@ export function TextSection({ layer }: Props) {
               <div className="flex items-center gap-2">
                 <input
                   type="color"
-                  value={layer.style.textShadow.color.startsWith('rgba') ? '#000000' : layer.style.textShadow.color}
+                  value={(layer.style.textShadow?.color ?? 'rgba(0, 0, 0, 0.5)').startsWith('rgba') ? '#000000' : layer.style.textShadow?.color ?? '#000000'}
                   onChange={(e) =>
                     handleStyleChange({
-                      textShadow: { ...layer.style.textShadow, color: e.target.value },
+                      textShadow: { ...(layer.style.textShadow ?? { enabled: true, color: 'rgba(0, 0, 0, 0.5)', blur: 4, offsetX: 0, offsetY: 2 }), color: e.target.value },
                     })
                   }
                   className="w-8 h-8 rounded border border-input cursor-pointer"
                 />
                 <input
                   type="text"
-                  value={layer.style.textShadow.color}
+                  value={layer.style.textShadow?.color ?? 'rgba(0, 0, 0, 0.5)'}
                   onChange={(e) =>
                     handleStyleChange({
-                      textShadow: { ...layer.style.textShadow, color: e.target.value },
+                      textShadow: { ...(layer.style.textShadow ?? { enabled: true, color: 'rgba(0, 0, 0, 0.5)', blur: 4, offsetX: 0, offsetY: 2 }), color: e.target.value },
                     })
                   }
                   className="flex-1 px-2 py-1.5 text-xs bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-primary font-mono"
@@ -465,13 +465,13 @@ export function TextSection({ layer }: Props) {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[10px] text-muted-foreground">Blur</label>
-                <span className="text-[10px] text-muted-foreground">{layer.style.textShadow.blur}px</span>
+                <span className="text-[10px] text-muted-foreground">{layer.style.textShadow?.blur ?? 4}px</span>
               </div>
               <Slider
-                value={[layer.style.textShadow.blur]}
+                value={[layer.style.textShadow?.blur ?? 4]}
                 onValueChange={([blur]) =>
                   handleStyleChange({
-                    textShadow: { ...layer.style.textShadow, blur },
+                    textShadow: { ...(layer.style.textShadow ?? { enabled: true, color: 'rgba(0, 0, 0, 0.5)', blur: 4, offsetX: 0, offsetY: 2 }), blur },
                   })
                 }
                 min={0}
@@ -484,13 +484,13 @@ export function TextSection({ layer }: Props) {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[10px] text-muted-foreground">Offset X</label>
-                  <span className="text-[10px] text-muted-foreground">{layer.style.textShadow.offsetX}px</span>
+                  <span className="text-[10px] text-muted-foreground">{layer.style.textShadow?.offsetX ?? 0}px</span>
                 </div>
                 <Slider
-                  value={[layer.style.textShadow.offsetX]}
+                  value={[layer.style.textShadow?.offsetX ?? 0]}
                   onValueChange={([offsetX]) =>
                     handleStyleChange({
-                      textShadow: { ...layer.style.textShadow, offsetX },
+                      textShadow: { ...(layer.style.textShadow ?? { enabled: true, color: 'rgba(0, 0, 0, 0.5)', blur: 4, offsetX: 0, offsetY: 2 }), offsetX },
                     })
                   }
                   min={-30}
@@ -501,13 +501,13 @@ export function TextSection({ layer }: Props) {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[10px] text-muted-foreground">Offset Y</label>
-                  <span className="text-[10px] text-muted-foreground">{layer.style.textShadow.offsetY}px</span>
+                  <span className="text-[10px] text-muted-foreground">{layer.style.textShadow?.offsetY ?? 2}px</span>
                 </div>
                 <Slider
-                  value={[layer.style.textShadow.offsetY]}
+                  value={[layer.style.textShadow?.offsetY ?? 2]}
                   onValueChange={([offsetY]) =>
                     handleStyleChange({
-                      textShadow: { ...layer.style.textShadow, offsetY },
+                      textShadow: { ...(layer.style.textShadow ?? { enabled: true, color: 'rgba(0, 0, 0, 0.5)', blur: 4, offsetX: 0, offsetY: 2 }), offsetY },
                     })
                   }
                   min={-30}
