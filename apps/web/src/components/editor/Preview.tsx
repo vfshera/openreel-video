@@ -3460,7 +3460,25 @@ export const Preview: React.FC = () => {
     const canvasWidth = settings.width;
     const canvasHeight = settings.height;
 
-    const displayScale = canvasRect.width / canvasWidth;
+    const canvasAspect = canvasWidth / canvasHeight;
+    const elementAspect = canvasRect.width / canvasRect.height;
+
+    let actualWidth: number;
+    let actualHeight: number;
+    let letterboxOffsetX = 0;
+    let letterboxOffsetY = 0;
+
+    if (elementAspect > canvasAspect) {
+      actualHeight = canvasRect.height;
+      actualWidth = actualHeight * canvasAspect;
+      letterboxOffsetX = (canvasRect.width - actualWidth) / 2;
+    } else {
+      actualWidth = canvasRect.width;
+      actualHeight = actualWidth / canvasAspect;
+      letterboxOffsetY = (canvasRect.height - actualHeight) / 2;
+    }
+
+    const displayScale = actualWidth / canvasWidth;
 
     const clipWidth = canvasWidth * transform.scale.x * displayScale;
     const clipHeight = canvasHeight * transform.scale.y * displayScale;
@@ -3468,11 +3486,11 @@ export const Preview: React.FC = () => {
     const offsetX = transform.position.x * displayScale;
     const offsetY = transform.position.y * displayScale;
 
-    const canvasOffsetX = canvasRect.left - overlayRect.left;
-    const canvasOffsetY = canvasRect.top - overlayRect.top;
+    const canvasOffsetX = canvasRect.left - overlayRect.left + letterboxOffsetX;
+    const canvasOffsetY = canvasRect.top - overlayRect.top + letterboxOffsetY;
 
-    const centerX = canvasOffsetX + canvasRect.width / 2 + offsetX;
-    const centerY = canvasOffsetY + canvasRect.height / 2 + offsetY;
+    const centerX = canvasOffsetX + actualWidth / 2 + offsetX;
+    const centerY = canvasOffsetY + actualHeight / 2 + offsetY;
 
     return {
       x: centerX - clipWidth / 2,
@@ -3505,7 +3523,26 @@ export const Preview: React.FC = () => {
 
     const canvasWidth = settings.width;
     const canvasHeight = settings.height;
-    const displayScale = canvasRect.width / canvasWidth;
+
+    const canvasAspect = canvasWidth / canvasHeight;
+    const elementAspect = canvasRect.width / canvasRect.height;
+
+    let actualWidth: number;
+    let actualHeight: number;
+    let letterboxOffsetX = 0;
+    let letterboxOffsetY = 0;
+
+    if (elementAspect > canvasAspect) {
+      actualHeight = canvasRect.height;
+      actualWidth = actualHeight * canvasAspect;
+      letterboxOffsetX = (canvasRect.width - actualWidth) / 2;
+    } else {
+      actualWidth = canvasRect.width;
+      actualHeight = actualWidth / canvasAspect;
+      letterboxOffsetY = (canvasRect.height - actualHeight) / 2;
+    }
+
+    const displayScale = actualWidth / canvasWidth;
 
     const lines = text.split("\n");
     const lineHeight = style.fontSize * style.lineHeight;
@@ -3519,8 +3556,8 @@ export const Preview: React.FC = () => {
     const posX = transform.position.x * canvasWidth * displayScale;
     const posY = transform.position.y * canvasHeight * displayScale;
 
-    const canvasOffsetX = canvasRect.left - overlayRect.left;
-    const canvasOffsetY = canvasRect.top - overlayRect.top;
+    const canvasOffsetX = canvasRect.left - overlayRect.left + letterboxOffsetX;
+    const canvasOffsetY = canvasRect.top - overlayRect.top + letterboxOffsetY;
 
     const centerX = canvasOffsetX + posX;
     const centerY = canvasOffsetY + posY;
@@ -3569,7 +3606,26 @@ export const Preview: React.FC = () => {
 
     const canvasWidth = settings.width;
     const canvasHeight = settings.height;
-    const displayScale = canvasRect.width / canvasWidth;
+
+    const canvasAspect = canvasWidth / canvasHeight;
+    const elementAspect = canvasRect.width / canvasRect.height;
+
+    let actualWidth: number;
+    let actualHeight: number;
+    let letterboxOffsetX = 0;
+    let letterboxOffsetY = 0;
+
+    if (elementAspect > canvasAspect) {
+      actualHeight = canvasRect.height;
+      actualWidth = actualHeight * canvasAspect;
+      letterboxOffsetX = (canvasRect.width - actualWidth) / 2;
+    } else {
+      actualWidth = canvasRect.width;
+      actualHeight = actualWidth / canvasAspect;
+      letterboxOffsetY = (canvasRect.height - actualHeight) / 2;
+    }
+
+    const displayScale = actualWidth / canvasWidth;
 
     const shapeWidth = shapeSize * transform.scale.x * displayScale;
     const shapeHeight = shapeSize * transform.scale.y * displayScale;
@@ -3577,8 +3633,8 @@ export const Preview: React.FC = () => {
     const posX = transform.position.x * canvasWidth * displayScale;
     const posY = transform.position.y * canvasHeight * displayScale;
 
-    const canvasOffsetX = canvasRect.left - overlayRect.left;
-    const canvasOffsetY = canvasRect.top - overlayRect.top;
+    const canvasOffsetX = canvasRect.left - overlayRect.left + letterboxOffsetX;
+    const canvasOffsetY = canvasRect.top - overlayRect.top + letterboxOffsetY;
 
     const centerX = canvasOffsetX + posX;
     const centerY = canvasOffsetY + posY;
@@ -3629,7 +3685,26 @@ export const Preview: React.FC = () => {
 
     const canvasWidth = settings.width;
     const canvasHeight = settings.height;
-    const displayScale = canvasRect.width / canvasWidth;
+
+    const canvasAspect = canvasWidth / canvasHeight;
+    const elementAspect = canvasRect.width / canvasRect.height;
+
+    let actualWidth: number;
+    let actualHeight: number;
+    let letterboxOffsetX = 0;
+    let letterboxOffsetY = 0;
+
+    if (elementAspect > canvasAspect) {
+      actualHeight = canvasRect.height;
+      actualWidth = actualHeight * canvasAspect;
+      letterboxOffsetX = (canvasRect.width - actualWidth) / 2;
+    } else {
+      actualWidth = canvasRect.width;
+      actualHeight = actualWidth / canvasAspect;
+      letterboxOffsetY = (canvasRect.height - actualHeight) / 2;
+    }
+
+    const displayScale = actualWidth / canvasWidth;
 
     let baseY: number;
     if (position === "top") {
@@ -3643,10 +3718,10 @@ export const Preview: React.FC = () => {
     const subtitleWidth = canvasWidth * 0.8 * displayScale;
     const subtitleHeight = totalHeight * displayScale;
 
-    const canvasOffsetX = canvasRect.left - overlayRect.left;
-    const canvasOffsetY = canvasRect.top - overlayRect.top;
+    const canvasOffsetX = canvasRect.left - overlayRect.left + letterboxOffsetX;
+    const canvasOffsetY = canvasRect.top - overlayRect.top + letterboxOffsetY;
 
-    const centerX = canvasOffsetX + canvasRect.width / 2;
+    const centerX = canvasOffsetX + actualWidth / 2;
     const topY = canvasOffsetY + baseY * displayScale;
 
     return {
@@ -4650,14 +4725,29 @@ export const Preview: React.FC = () => {
         </div>
       </div>
 
-      {/* Player Controls */}
+      {/* Player Controls with integrated Scrub Bar */}
       <div
-        className={`h-14 border-t border-border px-6 flex items-center justify-between transition-all duration-300 ${
+        className={`border-t border-border transition-all duration-300 ${
           isMaximized || isFullscreen
             ? "absolute bottom-0 left-0 right-0 z-50 bg-background-secondary backdrop-blur-sm"
             : "z-20 bg-background-secondary"
         }`}
       >
+        {/* Scrub Bar - integrated at top of controls */}
+        <div
+          className="h-1.5 bg-background-tertiary cursor-pointer group hover:h-2.5 transition-all relative"
+          onClick={handleScrubClick}
+        >
+          <div
+            className="h-full bg-primary relative pointer-events-none shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+            style={{ width: `${progressPercentage}%` }}
+          >
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity transform scale-0 group-hover:scale-100 duration-100 border border-black/20" />
+          </div>
+        </div>
+
+        {/* Controls row */}
+        <div className="h-12 px-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="font-mono text-text-primary tabular-nums text-sm w-24 tracking-wider">
             {formatTime(playheadPosition)}
@@ -4737,20 +4827,6 @@ export const Preview: React.FC = () => {
             {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
         </div>
-      </div>
-
-      {/* Scrub Bar */}
-      <div
-        className={`absolute bottom-14 left-0 right-0 h-1 bg-background-tertiary cursor-pointer group hover:h-2 transition-all ${
-          isMaximized || isFullscreen ? "z-50" : "z-20"
-        }`}
-        onClick={handleScrubClick}
-      >
-        <div
-          className="h-full bg-primary relative pointer-events-none shadow-[0_0_10px_rgba(34,197,94,0.5)]"
-          style={{ width: `${progressPercentage}%` }}
-        >
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity transform scale-0 group-hover:scale-100 duration-100 border border-black" />
         </div>
       </div>
     </div>
