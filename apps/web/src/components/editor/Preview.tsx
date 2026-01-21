@@ -350,6 +350,9 @@ export const Preview: React.FC = () => {
     allSubtitlesRef.current = allSubtitles;
   }, [allSubtitles]);
 
+  // Keep a ref to isScrubbing for use in playback loop
+  const isScrubbingRef = useRef(false);
+
   const selectedItems = useUIStore((state) => state.selectedItems);
   const cropMode = useUIStore((state) => state.cropMode);
   const cropClipId = useUIStore((state) => state.cropClipId);
@@ -360,12 +363,17 @@ export const Preview: React.FC = () => {
     playheadPosition,
     playbackState,
     playbackRate,
+    isScrubbing,
     pause,
     togglePlayback,
     seekTo,
     seekRelative,
     setPlayheadPosition,
   } = useTimelineStore();
+
+  useEffect(() => {
+    isScrubbingRef.current = isScrubbing;
+  }, [isScrubbing]);
 
   const isPlaying = playbackState === "playing";
 
@@ -1779,6 +1787,7 @@ export const Preview: React.FC = () => {
       }
 
       await audioGraph.resume();
+      audioGraph.seekTo(startPosition);
       audioGraph.startScheduler(() => {
         const tracksWithAudio = timelineTracks.filter(
           (t) => (t.type === "audio" || t.type === "video") && !t.hidden,
@@ -1839,11 +1848,19 @@ export const Preview: React.FC = () => {
 
         const currentPlayhead = masterClock.currentTime;
 
-        if (currentPlayhead >= actualEndTime || !masterClock.isPlaying) {
+        if (currentPlayhead >= actualEndTime) {
           cleanup();
           setPlayheadPosition(0);
           startPositionRef.current = 0;
           onEnd();
+          return;
+        }
+
+        if (!masterClock.isPlaying) {
+          cleanup();
+          if (!isScrubbingRef.current) {
+            onEnd();
+          }
           return;
         }
 
@@ -2275,7 +2292,7 @@ export const Preview: React.FC = () => {
                     nextResult.track,
                     clipEndTime,
                   );
-                } else {
+                } else if (!isScrubbingRef.current) {
                   setPlayheadPosition(0);
                   startPositionRef.current = 0;
                   pause();
@@ -2327,9 +2344,11 @@ export const Preview: React.FC = () => {
               const currentPlayhead = currentPlayheadTime;
 
               if (currentPlayhead >= actualEndTime) {
-                setPlayheadPosition(0);
-                startPositionRef.current = 0;
-                pause();
+                if (!isScrubbingRef.current) {
+                  setPlayheadPosition(0);
+                  startPositionRef.current = 0;
+                  pause();
+                }
                 input[Symbol.dispose]?.();
                 return;
               }
@@ -2672,6 +2691,7 @@ export const Preview: React.FC = () => {
       masterClock.setDuration(actualEndTime);
       masterClock.seek(playbackStartPosition);
 
+      audioGraph.seekTo(playbackStartPosition);
       audioGraph.startScheduler(getAudioClipsForScheduler);
 
       await masterClock.play();
@@ -2696,7 +2716,7 @@ export const Preview: React.FC = () => {
         const currentPlayhead = masterClock.currentTime;
 
         try {
-          if (currentPlayhead >= actualEndTime || !masterClock.isPlaying) {
+          if (currentPlayhead >= actualEndTime) {
             isProcessingFrame = false;
             cleanupPlaybackResources();
             cleanupAudioResources();
@@ -2704,6 +2724,16 @@ export const Preview: React.FC = () => {
             setPlayheadPosition(0);
             startPositionRef.current = 0;
             pause();
+            return;
+          }
+
+          if (!masterClock.isPlaying) {
+            isProcessingFrame = false;
+            cleanupPlaybackResources();
+            cleanupAudioResources();
+            if (!isScrubbingRef.current) {
+              pause();
+            }
             return;
           }
 
@@ -2752,6 +2782,7 @@ export const Preview: React.FC = () => {
 
             if (nextTime !== null) {
               masterClock.seek(nextTime);
+              audioGraph.seekTo(nextTime);
               isProcessingFrame = false;
               animationRef.current = requestAnimationFrame(
                 processMultiTrackFrame,
@@ -2761,10 +2792,12 @@ export const Preview: React.FC = () => {
               isProcessingFrame = false;
               cleanupPlaybackResources();
               cleanupAudioResources();
-              masterClock.stop();
-              setPlayheadPosition(0);
-              startPositionRef.current = 0;
-              pause();
+              if (!isScrubbingRef.current) {
+                masterClock.stop();
+                setPlayheadPosition(0);
+                startPositionRef.current = 0;
+                pause();
+              }
               return;
             }
           }

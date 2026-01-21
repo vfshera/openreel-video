@@ -275,6 +275,7 @@ export class PlaybackController {
     const clampedTime = Math.max(0, Math.min(time, duration));
 
     this.masterClock.seek(clampedTime);
+    this.realtimeAudioGraph.seekTo(clampedTime);
 
     if (wasPlaying) {
       this.stopAudioPlayback();
@@ -313,6 +314,7 @@ export class PlaybackController {
     const clampedTime = Math.max(0, Math.min(time, duration));
 
     this.masterClock.seek(clampedTime);
+    this.realtimeAudioGraph.seekTo(clampedTime);
 
     this.emitEvent({
       type: "timeupdate",

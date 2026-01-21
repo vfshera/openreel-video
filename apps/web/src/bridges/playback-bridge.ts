@@ -59,12 +59,12 @@ export class PlaybackBridge {
 
       switch (event.type) {
         case "timeupdate":
-          // Update playhead position in timeline store
-          timelineStore.setPlayheadPosition(event.time);
+          if (!this.playbackController?.getIsScrubbing()) {
+            timelineStore.setPlayheadPosition(event.time);
+          }
           break;
 
         case "statechange":
-          // Sync playback state with timeline store
           this.syncPlaybackState(event.state);
           break;
 
@@ -148,6 +148,10 @@ export class PlaybackBridge {
     controllerState: "stopped" | "playing" | "paused" | "seeking",
   ): void {
     if (this.isUpdatingProject) {
+      return;
+    }
+
+    if (this.playbackController?.getIsScrubbing()) {
       return;
     }
 

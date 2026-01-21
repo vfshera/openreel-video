@@ -623,6 +623,11 @@ export class RealtimeAudioGraph {
     this.stopAllClips();
   }
 
+  seekTo(time: number): void {
+    this.stopAllClips();
+    this.lastScheduledTime = time;
+  }
+
   dispose(): void {
     this.stopScheduler();
     for (const trackId of Array.from(this.trackNodes.keys())) {
