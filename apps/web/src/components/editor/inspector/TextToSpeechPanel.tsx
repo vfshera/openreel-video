@@ -197,7 +197,7 @@ export const TextToSpeechPanel: React.FC = () => {
   const maxChars = 5000;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 w-full min-w-0 max-w-full">
       <audio ref={audioRef} onEnded={handleAudioEnded} className="hidden" />
 
       <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/30">

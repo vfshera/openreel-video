@@ -139,7 +139,7 @@ export const AutoCaptionPanel: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0 max-w-full">
       <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/30">
         <Sparkles size={16} className="text-primary" />
         <div>
