@@ -23,11 +23,20 @@ import {
   CanvasBackground,
 } from '../types/project';
 
+interface LayerStyle {
+  blendMode: Layer['blendMode'];
+  shadow: Layer['shadow'];
+  stroke: Layer['stroke'];
+  glow: Layer['glow'];
+  filters: Layer['filters'];
+}
+
 interface ProjectState {
   project: Project | null;
   selectedLayerIds: string[];
   selectedArtboardId: string | null;
   copiedLayers: Layer[];
+  copiedStyle: LayerStyle | null;
   isDirty: boolean;
 }
 
@@ -70,6 +79,9 @@ interface ProjectActions {
   cutLayers: () => void;
   pasteLayers: () => void;
 
+  copyLayerStyle: () => void;
+  pasteLayerStyle: () => void;
+
   groupLayers: (layerIds: string[]) => string | null;
   ungroupLayers: (groupId: string) => void;
 
@@ -89,6 +101,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
       selectedLayerIds: [],
       selectedArtboardId: null,
       copiedLayers: [],
+      copiedStyle: null,
       isDirty: false,
 
       createProject: (name, size, background) => {
@@ -699,6 +712,46 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
             state.isDirty = true;
           }
         });
+      },
+
+      copyLayerStyle: () => {
+        const { project, selectedLayerIds } = get();
+        if (project && selectedLayerIds.length === 1) {
+          const layer = project.layers[selectedLayerIds[0]];
+          if (layer) {
+            set({
+              copiedStyle: {
+                blendMode: JSON.parse(JSON.stringify(layer.blendMode)),
+                shadow: JSON.parse(JSON.stringify(layer.shadow)),
+                stroke: JSON.parse(JSON.stringify(layer.stroke)),
+                glow: JSON.parse(JSON.stringify(layer.glow)),
+                filters: JSON.parse(JSON.stringify(layer.filters)),
+              },
+            });
+          }
+        }
+      },
+
+      pasteLayerStyle: () => {
+        const { copiedStyle, selectedLayerIds } = get();
+        if (copiedStyle && selectedLayerIds.length > 0) {
+          set((state) => {
+            if (state.project) {
+              selectedLayerIds.forEach((layerId) => {
+                const layer = state.project!.layers[layerId];
+                if (layer) {
+                  layer.blendMode = JSON.parse(JSON.stringify(copiedStyle.blendMode));
+                  layer.shadow = JSON.parse(JSON.stringify(copiedStyle.shadow));
+                  layer.stroke = JSON.parse(JSON.stringify(copiedStyle.stroke));
+                  layer.glow = JSON.parse(JSON.stringify(copiedStyle.glow));
+                  layer.filters = JSON.parse(JSON.stringify(copiedStyle.filters));
+                }
+              });
+              state.project.updatedAt = Date.now();
+              state.isDirty = true;
+            }
+          });
+        }
       },
 
       markDirty: () => set({ isDirty: true }),

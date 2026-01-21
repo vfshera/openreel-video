@@ -13,9 +13,9 @@ export function Canvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
-  const { project, selectedLayerIds, selectedArtboardId, updateLayerTransform, selectLayer, deselectAllLayers, addPathLayer } = useProjectStore();
+  const { project, selectedLayerIds, selectedArtboardId, updateLayerTransform, selectLayer, selectLayers, deselectAllLayers, addPathLayer } = useProjectStore();
   const { zoom, panX, panY, setPan, activeTool, showGrid, showRulers, gridSize, crop, snapToObjects, snapToGuides, snapToGrid, penSettings, drawing, startDrawing, addDrawingPoint, finishDrawing } = useUIStore();
-  const { setCanvasRef, setContainerRef, startDrag, updateDrag, endDrag, isDragging, dragMode, dragCurrentX, dragCurrentY, guides, smartGuides, setSmartGuides, clearSmartGuides } = useCanvasStore();
+  const { setCanvasRef, setContainerRef, startDrag, updateDrag, endDrag, isDragging, dragMode, dragCurrentX, dragCurrentY, guides, smartGuides, setSmartGuides, clearSmartGuides, isMarqueeSelecting, marqueeRect, startMarqueeSelect, updateMarqueeSelect, endMarqueeSelect } = useCanvasStore();
 
   const artboard = project?.artboards.find((a) => a.id === selectedArtboardId);
 
@@ -179,6 +179,23 @@ export function Canvas() {
       ctx.restore();
     }
 
+    if (isMarqueeSelecting && marqueeRect) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.1)';
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+
+      const mx = artboardX + marqueeRect.x * zoom;
+      const my = artboardY + marqueeRect.y * zoom;
+      const mw = marqueeRect.width * zoom;
+      const mh = marqueeRect.height * zoom;
+
+      ctx.fillRect(mx, my, mw, mh);
+      ctx.strokeRect(mx, my, mw, mh);
+      ctx.restore();
+    }
+
     if (crop.isActive && crop.layerId && crop.cropRect) {
       const cropLayer = project.layers[crop.layerId];
       if (cropLayer) {
@@ -260,7 +277,7 @@ export function Canvas() {
     }
 
     ctx.restore();
-  }, [artboard, project, zoom, panX, panY, selectedLayerIds, showGrid, gridSize, crop, smartGuides, drawing, penSettings]);
+  }, [artboard, project, zoom, panX, panY, selectedLayerIds, showGrid, gridSize, crop, smartGuides, drawing, penSettings, isMarqueeSelecting, marqueeRect]);
 
   useEffect(() => {
     render();
@@ -354,10 +371,12 @@ export function Canvas() {
           startDrag('move', e.clientX, e.clientY);
         } else {
           deselectAllLayers();
+          startMarqueeSelect(x, y);
+          startDrag('marquee', e.clientX, e.clientY);
         }
       }
     },
-    [activeTool, screenToCanvas, findLayerAtPoint, selectLayer, deselectAllLayers, startDrag, selectedLayerIds, startDrawing]
+    [activeTool, screenToCanvas, findLayerAtPoint, selectLayer, deselectAllLayers, startDrag, selectedLayerIds, startDrawing, startMarqueeSelect]
   );
 
   const handleMouseMove = useCallback(
@@ -372,6 +391,13 @@ export function Canvas() {
       if (!isDragging) return;
 
       updateDrag(e.clientX, e.clientY);
+
+      if (dragMode === 'marquee') {
+        const { x, y } = screenToCanvas(e.clientX, e.clientY);
+        updateMarqueeSelect(x, y);
+        render();
+        return;
+      }
 
       if (dragMode === 'pan') {
         const dx = e.clientX - dragCurrentX;
@@ -417,7 +443,38 @@ export function Canvas() {
         }
       }
     },
-    [isDragging, dragMode, dragCurrentX, dragCurrentY, panX, panY, setPan, zoom, selectedLayerIds, project, updateLayerTransform, updateDrag, artboard, guides, snapToObjects, snapToGuides, snapToGrid, gridSize, setSmartGuides, drawing.isDrawing, screenToCanvas, addDrawingPoint, render]
+    [isDragging, dragMode, dragCurrentX, dragCurrentY, panX, panY, setPan, zoom, selectedLayerIds, project, updateLayerTransform, updateDrag, artboard, guides, snapToObjects, snapToGuides, snapToGrid, gridSize, setSmartGuides, drawing.isDrawing, screenToCanvas, addDrawingPoint, render, updateMarqueeSelect]
+  );
+
+  const findLayersInRect = useCallback(
+    (rect: { x: number; y: number; width: number; height: number }): string[] => {
+      if (!artboard || !project) return [];
+
+      const found: string[] = [];
+      for (const layerId of artboard.layerIds) {
+        const layer = project.layers[layerId];
+        if (!layer || !layer.visible || layer.locked) continue;
+
+        const { transform } = layer;
+        const layerLeft = transform.x;
+        const layerRight = transform.x + transform.width;
+        const layerTop = transform.y;
+        const layerBottom = transform.y + transform.height;
+
+        const rectLeft = rect.x;
+        const rectRight = rect.x + rect.width;
+        const rectTop = rect.y;
+        const rectBottom = rect.y + rect.height;
+
+        const intersects = !(layerRight < rectLeft || layerLeft > rectRight || layerBottom < rectTop || layerTop > rectBottom);
+
+        if (intersects) {
+          found.push(layerId);
+        }
+      }
+      return found;
+    },
+    [artboard, project]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -430,9 +487,22 @@ export function Canvas() {
       return;
     }
 
+    if (dragMode === 'marquee') {
+      const rect = endMarqueeSelect();
+      if (rect && rect.width > 5 && rect.height > 5) {
+        const layerIds = findLayersInRect(rect);
+        if (layerIds.length > 0) {
+          selectLayers(layerIds);
+        }
+      }
+      endDrag();
+      render();
+      return;
+    }
+
     endDrag();
     clearSmartGuides();
-  }, [endDrag, clearSmartGuides, drawing.isDrawing, finishDrawing, addPathLayer, penSettings, render]);
+  }, [endDrag, clearSmartGuides, drawing.isDrawing, finishDrawing, addPathLayer, penSettings, render, dragMode, endMarqueeSelect, findLayersInRect, selectLayers]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -480,6 +550,21 @@ export function Canvas() {
   );
 }
 
+const BLEND_MODE_MAP: Record<string, GlobalCompositeOperation> = {
+  'normal': 'source-over',
+  'multiply': 'multiply',
+  'screen': 'screen',
+  'overlay': 'overlay',
+  'darken': 'darken',
+  'lighten': 'lighten',
+  'color-dodge': 'color-dodge',
+  'color-burn': 'color-burn',
+  'hard-light': 'hard-light',
+  'soft-light': 'soft-light',
+  'difference': 'difference',
+  'exclusion': 'exclusion',
+};
+
 function renderLayer(
   ctx: CanvasRenderingContext2D,
   layer: Layer,
@@ -488,12 +573,14 @@ function renderLayer(
   const { transform } = layer;
   const shadow = layer.shadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 0, offsetY: 4 };
   const glow = layer.glow ?? { enabled: false, color: '#ffffff', blur: 20, intensity: 1 };
+  const blendMode = layer.blendMode?.mode ?? 'normal';
 
   ctx.save();
   ctx.translate(transform.x, transform.y);
   ctx.rotate((transform.rotation * Math.PI) / 180);
   ctx.scale(transform.scaleX, transform.scaleY);
   ctx.globalAlpha = transform.opacity;
+  ctx.globalCompositeOperation = BLEND_MODE_MAP[blendMode] ?? 'source-over';
 
   if (glow.enabled && glow.blur > 0) {
     ctx.save();
@@ -607,6 +694,18 @@ function renderImageLayer(
     return;
   }
 
+  const flipH = layer.flipHorizontal ?? false;
+  const flipV = layer.flipVertical ?? false;
+
+  if (flipH || flipV) {
+    ctx.save();
+    ctx.translate(
+      flipH ? layer.transform.width : 0,
+      flipV ? layer.transform.height : 0
+    );
+    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+  }
+
   const img = new window.Image();
   img.src = asset.dataUrl ?? asset.blobUrl ?? '';
   if (img.complete) {
@@ -649,6 +748,10 @@ function renderImageLayer(
     }
 
     ctx.filter = 'none';
+  }
+
+  if (flipH || flipV) {
+    ctx.restore();
   }
 }
 

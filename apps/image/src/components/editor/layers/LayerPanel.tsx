@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Lock, Unlock, Trash2, Copy, ChevronUp, ChevronDown, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, Clipboard, ClipboardCopy, Scissors } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Trash2, Copy, ChevronUp, ChevronDown, ArrowUp, ArrowDown, ArrowUpToLine, ArrowDownToLine, Clipboard, ClipboardCopy, Scissors, Paintbrush } from 'lucide-react';
 import { useProjectStore } from '../../../stores/project-store';
 import type { Layer } from '../../../types/project';
 import {
@@ -16,6 +16,7 @@ export function LayerPanel() {
     project,
     selectedLayerIds,
     selectedArtboardId,
+    copiedStyle,
     selectLayer,
     updateLayer,
     removeLayer,
@@ -27,6 +28,8 @@ export function LayerPanel() {
     copyLayers,
     cutLayers,
     pasteLayers,
+    copyLayerStyle,
+    pasteLayerStyle,
   } = useProjectStore();
 
   const artboard = project?.artboards.find((a) => a.id === selectedArtboardId);
@@ -171,6 +174,15 @@ export function LayerPanel() {
                       <Copy size={14} className="mr-2" />
                       Duplicate
                       <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onClick={() => { selectLayer(layer.id); copyLayerStyle(); }}>
+                      <Paintbrush size={14} className="mr-2" />
+                      Copy Style
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={pasteLayerStyle} disabled={!copiedStyle}>
+                      <Paintbrush size={14} className="mr-2" />
+                      Paste Style
                     </ContextMenuItem>
                     <ContextMenuSeparator />
                     <ContextMenuItem onClick={() => moveLayerToTop(layer.id)}>

@@ -1,6 +1,6 @@
 import { useProjectStore } from '../../../stores/project-store';
 import type { TextLayer, TextStyle, TextFillType, Gradient } from '../../../types/project';
-import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, Underline, CaseUpper, CaseLower, CaseSensitive, Strikethrough } from 'lucide-react';
+import { AlignLeft, AlignCenter, AlignRight, Bold, Italic, Underline, CaseUpper, CaseLower, CaseSensitive, Strikethrough, Type } from 'lucide-react';
 import { FontPicker } from '../../ui/FontPicker';
 import { GradientPicker } from '../../ui/GradientPicker';
 import { Slider, Switch } from '@openreel/ui';
@@ -10,6 +10,55 @@ interface Props {
 }
 
 const FONT_SIZES = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72, 96, 128];
+
+interface TextPreset {
+  id: string;
+  name: string;
+  style: Partial<TextStyle>;
+}
+
+const TEXT_PRESETS: TextPreset[] = [
+  {
+    id: 'heading-1',
+    name: 'Heading 1',
+    style: { fontSize: 72, fontWeight: 700, lineHeight: 1.1 },
+  },
+  {
+    id: 'heading-2',
+    name: 'Heading 2',
+    style: { fontSize: 48, fontWeight: 700, lineHeight: 1.2 },
+  },
+  {
+    id: 'heading-3',
+    name: 'Heading 3',
+    style: { fontSize: 36, fontWeight: 600, lineHeight: 1.2 },
+  },
+  {
+    id: 'subheading',
+    name: 'Subheading',
+    style: { fontSize: 24, fontWeight: 500, lineHeight: 1.3 },
+  },
+  {
+    id: 'body',
+    name: 'Body',
+    style: { fontSize: 16, fontWeight: 400, lineHeight: 1.5 },
+  },
+  {
+    id: 'body-large',
+    name: 'Body Large',
+    style: { fontSize: 18, fontWeight: 400, lineHeight: 1.6 },
+  },
+  {
+    id: 'caption',
+    name: 'Caption',
+    style: { fontSize: 12, fontWeight: 400, lineHeight: 1.4, color: '#a3a3a3' },
+  },
+  {
+    id: 'quote',
+    name: 'Quote',
+    style: { fontSize: 24, fontWeight: 400, fontStyle: 'italic' as const, lineHeight: 1.5 },
+  },
+];
 
 export function TextSection({ layer }: Props) {
   const { updateLayer } = useProjectStore();
@@ -63,11 +112,33 @@ export function TextSection({ layer }: Props) {
     handleContentChange(capitalized);
   };
 
+  const applyPreset = (preset: TextPreset) => {
+    handleStyleChange(preset.style);
+  };
+
   return (
     <div className="space-y-4">
       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
         Text
       </h4>
+
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <Type size={14} className="text-muted-foreground" />
+          <label className="text-[10px] text-muted-foreground">Text Presets</label>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {TEXT_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => applyPreset(preset)}
+              className="px-2.5 py-1.5 text-[10px] rounded-md bg-secondary text-secondary-foreground hover:bg-accent transition-colors"
+            >
+              {preset.name}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div>
         <label className="block text-[10px] text-muted-foreground mb-1">Content</label>
