@@ -12,17 +12,30 @@ export default defineConfig({
   },
   build: {
     target: "esnext",
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
-            return "react";
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom") || id.includes("node_modules/scheduler")) {
+            return "vendor-react";
           }
           if (id.includes("node_modules/zustand")) {
-            return "zustand";
+            return "vendor-zustand";
           }
           if (id.includes("node_modules/@radix-ui")) {
-            return "radix";
+            return "vendor-radix";
+          }
+          if (id.includes("node_modules/lucide-react")) {
+            return "vendor-icons";
+          }
+          if (id.includes("components/editor/canvas/Canvas")) {
+            return "editor-canvas";
+          }
+          if (id.includes("components/editor/ExportDialog")) {
+            return "editor-export";
+          }
+          if (id.includes("components/editor/inspector")) {
+            return "editor-inspector";
           }
         },
       },

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo, useMemo } from 'react';
 import {
   Layers,
   Image,
@@ -83,7 +83,7 @@ interface LayerItemProps {
   getLayerIcon: (type: string) => React.ReactNode;
 }
 
-function LayerItem({
+const LayerItem = memo(function LayerItem({
   layer,
   depth,
   project,
@@ -252,7 +252,8 @@ function LayerItem({
       )}
     </>
   );
-}
+});
+
 import {
   TEMPLATE_CATEGORIES,
   getTemplatesByCategory,
@@ -271,7 +272,7 @@ const panels: { id: Panel; icon: React.ElementType; label: string }[] = [
   { id: 'uploads', icon: Upload, label: 'Uploads' },
 ];
 
-export function LeftPanel() {
+export const LeftPanel = memo(function LeftPanel() {
   const { activePanel, setActivePanel } = useUIStore();
 
   return (
@@ -308,7 +309,7 @@ export function LeftPanel() {
       </div>
     </div>
   );
-}
+});
 
 function LayersPanel() {
   const {
@@ -335,13 +336,17 @@ function LayersPanel() {
   const dragSelectIds = useRef<Set<string>>(new Set());
 
   const artboard = project?.artboards.find((a) => a.id === selectedArtboardId);
-  const layers = artboard?.layerIds.map((id) => project?.layers[id]).filter(Boolean) ?? [];
 
-  const filteredLayers = searchQuery
-    ? layers.filter((layer) =>
-        layer && layer.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : layers;
+  const layers = useMemo(() => {
+    if (!artboard || !project) return [];
+    return artboard.layerIds.map((id) => project.layers[id]).filter(Boolean);
+  }, [artboard, project]);
+
+  const filteredLayers = useMemo(() => {
+    if (!searchQuery) return layers;
+    const query = searchQuery.toLowerCase();
+    return layers.filter((layer) => layer && layer.name.toLowerCase().includes(query));
+  }, [layers, searchQuery]);
 
   const handleStartRename = (layer: { id: string; name: string }) => {
     setEditingLayerId(layer.id);

@@ -1,22 +1,28 @@
+import { memo, lazy, Suspense } from 'react';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
 import { TransformSection } from './TransformSection';
 import { AlignmentSection } from './AlignmentSection';
 import { AppearanceSection } from './AppearanceSection';
 import { EffectsSection } from './EffectsSection';
-import { ImageAdjustmentsSection } from './ImageAdjustmentsSection';
-import { FilterPresetsSection } from './FilterPresetsSection';
-import { CropSection } from './CropSection';
-import { ImageControlsSection } from './ImageControlsSection';
-import { BackgroundRemovalSection } from './BackgroundRemovalSection';
-import { TextSection } from './TextSection';
-import { ShapeSection } from './ShapeSection';
 import { ArtboardSection } from './ArtboardSection';
 import { PenSettingsSection } from './PenSettingsSection';
 import { ColorHarmonySection } from './ColorHarmonySection';
 import type { Layer, ImageLayer, TextLayer, ShapeLayer } from '../../../types/project';
 
-export function Inspector() {
+const ImageAdjustmentsSection = lazy(() => import('./ImageAdjustmentsSection').then(m => ({ default: m.ImageAdjustmentsSection })));
+const FilterPresetsSection = lazy(() => import('./FilterPresetsSection').then(m => ({ default: m.FilterPresetsSection })));
+const CropSection = lazy(() => import('./CropSection').then(m => ({ default: m.CropSection })));
+const ImageControlsSection = lazy(() => import('./ImageControlsSection').then(m => ({ default: m.ImageControlsSection })));
+const BackgroundRemovalSection = lazy(() => import('./BackgroundRemovalSection').then(m => ({ default: m.BackgroundRemovalSection })));
+const TextSection = lazy(() => import('./TextSection').then(m => ({ default: m.TextSection })));
+const ShapeSection = lazy(() => import('./ShapeSection').then(m => ({ default: m.ShapeSection })));
+
+function SectionLoader() {
+  return <div className="h-8 animate-pulse bg-muted/30 rounded" />;
+}
+
+function InspectorContent() {
   const { project, selectedLayerIds, selectedArtboardId } = useProjectStore();
   const { activeTool } = useUIStore();
 
@@ -87,17 +93,17 @@ export function Inspector() {
       <EffectsSection layer={singleLayer} />
 
       {singleLayer.type === 'image' && (
-        <>
+        <Suspense fallback={<SectionLoader />}>
           <ImageControlsSection layer={singleLayer as ImageLayer} />
           <CropSection layer={singleLayer as ImageLayer} />
           <BackgroundRemovalSection layer={singleLayer as ImageLayer} />
           <FilterPresetsSection layer={singleLayer as ImageLayer} />
           <ImageAdjustmentsSection layer={singleLayer as ImageLayer} />
-        </>
+        </Suspense>
       )}
 
       {singleLayer.type === 'text' && (
-        <>
+        <Suspense fallback={<SectionLoader />}>
           <TextSection layer={singleLayer as TextLayer} />
           <ColorHarmonySection
             baseColor={(singleLayer as TextLayer).style.color}
@@ -107,11 +113,11 @@ export function Inspector() {
               });
             }}
           />
-        </>
+        </Suspense>
       )}
 
       {singleLayer.type === 'shape' && (
-        <>
+        <Suspense fallback={<SectionLoader />}>
           <ShapeSection layer={singleLayer as ShapeLayer} />
           {(singleLayer as ShapeLayer).shapeStyle.fill && (
             <ColorHarmonySection
@@ -123,8 +129,10 @@ export function Inspector() {
               }}
             />
           )}
-        </>
+        </Suspense>
       )}
     </div>
   );
 }
+
+export const Inspector = memo(InspectorContent);

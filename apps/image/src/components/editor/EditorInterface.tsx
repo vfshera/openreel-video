@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Toolbar } from './toolbar/Toolbar';
 import { LeftPanel } from './panels/LeftPanel';
 import { Canvas } from './canvas/Canvas';
@@ -7,10 +7,11 @@ import { LayerPanel } from './layers/LayerPanel';
 import { HistoryPanel } from './panels/HistoryPanel';
 import { GuidePanel } from './panels/GuidePanel';
 import { PagesBar } from './pages/PagesBar';
-import { ExportDialog } from './ExportDialog';
 import { useUIStore } from '../../stores/ui-store';
 import { useProjectStore } from '../../stores/project-store';
 import { Layers, History, Ruler } from 'lucide-react';
+
+const ExportDialog = lazy(() => import('./ExportDialog').then(m => ({ default: m.ExportDialog })));
 
 type BottomTab = 'layers' | 'history' | 'guides';
 
@@ -96,7 +97,11 @@ export function EditorInterface() {
         )}
       </div>
 
-      <ExportDialog open={isExportDialogOpen} onClose={closeExportDialog} />
+      {isExportDialogOpen && (
+        <Suspense fallback={null}>
+          <ExportDialog open={isExportDialogOpen} onClose={closeExportDialog} />
+        </Suspense>
+      )}
     </div>
   );
 }

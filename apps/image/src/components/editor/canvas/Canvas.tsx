@@ -11,7 +11,9 @@ const RULER_SIZE = 20;
 const HANDLE_SIZE = 8;
 const ROTATION_HANDLE_DISTANCE = 24;
 
+const MAX_IMAGE_CACHE_SIZE = 50;
 const imageCache = new Map<string, HTMLImageElement>();
+const imageCacheOrder: string[] = [];
 let renderCallback: (() => void) | null = null;
 
 function getCachedImage(src: string): HTMLImageElement | null {
@@ -19,13 +21,30 @@ function getCachedImage(src: string): HTMLImageElement | null {
 
   const cached = imageCache.get(src);
   if (cached && cached.complete && cached.naturalWidth > 0) {
+    const idx = imageCacheOrder.indexOf(src);
+    if (idx > -1) {
+      imageCacheOrder.splice(idx, 1);
+      imageCacheOrder.push(src);
+    }
     return cached;
   }
 
   if (!cached) {
+    if (imageCache.size >= MAX_IMAGE_CACHE_SIZE) {
+      const oldest = imageCacheOrder.shift();
+      if (oldest) {
+        const oldImg = imageCache.get(oldest);
+        if (oldImg?.src?.startsWith('blob:')) {
+          URL.revokeObjectURL(oldImg.src);
+        }
+        imageCache.delete(oldest);
+      }
+    }
+
     const img = new window.Image();
     img.src = src;
     imageCache.set(src, img);
+    imageCacheOrder.push(src);
 
     if (!img.complete) {
       img.onload = () => {
@@ -44,10 +63,52 @@ function getCachedImage(src: string): HTMLImageElement | null {
   return null;
 }
 
+interface ViewportBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+function getViewportBounds(
+  canvasWidth: number,
+  canvasHeight: number,
+  artboardWidth: number,
+  artboardHeight: number,
+  zoom: number,
+  panX: number,
+  panY: number
+): ViewportBounds {
+  const centerX = canvasWidth / 2 + panX;
+  const centerY = canvasHeight / 2 + panY;
+  const artboardX = centerX - (artboardWidth * zoom) / 2;
+  const artboardY = centerY - (artboardHeight * zoom) / 2;
+
+  return {
+    left: -artboardX / zoom,
+    top: -artboardY / zoom,
+    right: (canvasWidth - artboardX) / zoom,
+    bottom: (canvasHeight - artboardY) / zoom,
+  };
+}
+
+function isLayerInViewport(layer: Layer, viewport: ViewportBounds): boolean {
+  const { x, y, width, height } = layer.transform;
+  return !(
+    x + width < viewport.left ||
+    x > viewport.right ||
+    y + height < viewport.top ||
+    y > viewport.bottom
+  );
+}
+
 export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const renderScheduledRef = useRef(false);
+  const lastRenderHashRef = useRef<string>('');
+  const forceRenderRef = useRef(false);
 
   const {
     project,
@@ -109,6 +170,13 @@ export function Canvas() {
       canvas.height = container.clientHeight;
     }
 
+    const renderHash = `${zoom}-${panX}-${panY}-${selectedLayerIds.join(',')}-${project.updatedAt}-${showGrid}-${drawing.isDrawing}-${isMarqueeSelecting}`;
+    if (renderHash === lastRenderHashRef.current && !forceRenderRef.current) {
+      return;
+    }
+    lastRenderHashRef.current = renderHash;
+    forceRenderRef.current = false;
+
     ctx.save();
     ctx.fillStyle = '#18181b';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -156,10 +224,21 @@ export function Canvas() {
       }
     }
 
+    const viewport = getViewportBounds(
+      canvas.width,
+      canvas.height,
+      artboard.size.width,
+      artboard.size.height,
+      zoom,
+      panX,
+      panY
+    );
+
     const sortedLayerIds = [...artboard.layerIds].reverse();
     sortedLayerIds.forEach((layerId) => {
       const layer = project.layers[layerId];
       if (!layer || !layer.visible) return;
+      if (!isLayerInViewport(layer, viewport)) return;
       renderLayerWithChildren(ctx, layer, project);
     });
 
@@ -365,20 +444,35 @@ export function Canvas() {
     ctx.restore();
   }, [artboard, project, zoom, panX, panY, selectedLayerIds, showGrid, gridSize, crop, smartGuides, drawing, penSettings, isMarqueeSelecting, marqueeRect]);
 
-  useEffect(() => {
-    render();
+  const scheduleRender = useCallback(() => {
+    if (renderScheduledRef.current) return;
+    renderScheduledRef.current = true;
+
+    requestAnimationFrame(() => {
+      render();
+      renderScheduledRef.current = false;
+    });
   }, [render]);
 
+  const forceRender = useCallback(() => {
+    forceRenderRef.current = true;
+    scheduleRender();
+  }, [scheduleRender]);
+
   useEffect(() => {
-    renderCallback = render;
+    scheduleRender();
+  }, [scheduleRender]);
+
+  useEffect(() => {
+    renderCallback = forceRender;
     return () => {
       renderCallback = null;
     };
-  }, [render]);
+  }, [forceRender]);
 
   useEffect(() => {
     const handleResize = () => {
-      render();
+      forceRender();
       if (containerRef.current) {
         setContainerSize({
           width: containerRef.current.clientWidth,
@@ -389,7 +483,7 @@ export function Canvas() {
     window.addEventListener('resize', handleResize);
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
-  }, [render]);
+  }, [forceRender]);
 
   const screenToCanvas = useCallback(
     (screenX: number, screenY: number) => {
@@ -579,7 +673,7 @@ export function Canvas() {
       if (drawing.isDrawing) {
         const { x, y } = screenToCanvas(e.clientX, e.clientY);
         addDrawingPoint({ x, y });
-        render();
+        scheduleRender();
         return;
       }
 
@@ -599,7 +693,7 @@ export function Canvas() {
       if (dragMode === 'marquee') {
         const { x, y } = screenToCanvas(e.clientX, e.clientY);
         updateMarqueeSelect(x, y);
-        render();
+        scheduleRender();
         return;
       }
 
@@ -794,7 +888,7 @@ export function Canvas() {
         }
       }
     },
-    [isDragging, dragMode, dragCurrentX, dragCurrentY, dragStartX, dragStartY, panX, panY, setPan, zoom, selectedLayerIds, project, updateLayerTransform, updateDrag, artboard, guides, snapToObjects, snapToGuides, snapToGrid, gridSize, setSmartGuides, drawing.isDrawing, screenToCanvas, addDrawingPoint, render, updateMarqueeSelect, activeResizeHandle, activeTool, getHandleAtPoint]
+    [isDragging, dragMode, dragCurrentX, dragCurrentY, dragStartX, dragStartY, panX, panY, setPan, zoom, selectedLayerIds, project, updateLayerTransform, updateDrag, artboard, guides, snapToObjects, snapToGuides, snapToGrid, gridSize, setSmartGuides, drawing.isDrawing, screenToCanvas, addDrawingPoint, scheduleRender, updateMarqueeSelect, activeResizeHandle, activeTool, getHandleAtPoint]
   );
 
   const findLayersInRect = useCallback(
@@ -834,7 +928,7 @@ export function Canvas() {
       if (path && path.length > 1) {
         addPathLayer(path, penSettings.color, penSettings.width);
       }
-      render();
+      scheduleRender();
       return;
     }
 
@@ -847,7 +941,7 @@ export function Canvas() {
         }
       }
       endDrag();
-      render();
+      scheduleRender();
       return;
     }
 
@@ -855,7 +949,7 @@ export function Canvas() {
     setActiveResizeHandle(null);
     endDrag();
     clearSmartGuides();
-  }, [endDrag, clearSmartGuides, drawing.isDrawing, finishDrawing, addPathLayer, penSettings, render, dragMode, endMarqueeSelect, findLayersInRect, selectLayers, setActiveResizeHandle]);
+  }, [endDrag, clearSmartGuides, drawing.isDrawing, finishDrawing, addPathLayer, penSettings, scheduleRender, dragMode, endMarqueeSelect, findLayersInRect, selectLayers, setActiveResizeHandle]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
