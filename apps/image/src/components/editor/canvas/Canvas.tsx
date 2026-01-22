@@ -16,6 +16,120 @@ const imageCache = new Map<string, HTMLImageElement>();
 const imageCacheOrder: string[] = [];
 let renderCallback: (() => void) | null = null;
 
+const MAX_LAYER_CACHE_SIZE = 30;
+interface LayerCacheEntry {
+  canvas: OffscreenCanvas;
+  hash: string;
+  width: number;
+  height: number;
+}
+const layerCache = new Map<string, LayerCacheEntry>();
+const layerCacheOrder: string[] = [];
+
+function getLayerHash(
+  layer: Layer,
+  _assets: Record<string, { dataUrl?: string; blobUrl?: string }>
+): string {
+  const { transform } = layer;
+  const baseHash = `${layer.id}-${transform.width}-${transform.height}-${transform.opacity}-${transform.scaleX}-${transform.scaleY}-${transform.skewX ?? 0}-${transform.skewY ?? 0}-${layer.flipHorizontal ?? false}-${layer.flipVertical ?? false}-${layer.blendMode?.mode ?? 'normal'}`;
+
+  const shadow = layer.shadow;
+  const shadowHash = shadow?.enabled ? `${shadow.color}-${shadow.blur}-${shadow.offsetX}-${shadow.offsetY}` : 'no-shadow';
+
+  const innerShadow = layer.innerShadow;
+  const innerShadowHash = innerShadow?.enabled ? `${innerShadow.color}-${innerShadow.blur}-${innerShadow.offsetX}-${innerShadow.offsetY}` : 'no-inner';
+
+  const glow = layer.glow;
+  const glowHash = glow?.enabled ? `${glow.color}-${glow.blur}-${glow.intensity ?? 1}` : 'no-glow';
+
+  let contentHash = '';
+  if (layer.type === 'image') {
+    const imgLayer = layer as ImageLayer;
+    const { filters } = imgLayer;
+    contentHash = `img-${imgLayer.sourceId}-${filters.brightness}-${filters.contrast}-${filters.saturation}-${filters.hue}-${filters.blur}-${filters.blurType}-${filters.sepia}-${filters.invert}-${filters.exposure}-${filters.highlights}-${filters.shadows}-${filters.clarity}-${filters.vibrance}`;
+  } else if (layer.type === 'text') {
+    const textLayer = layer as TextLayer;
+    const { style, content } = textLayer;
+    contentHash = `txt-${content}-${style.fontFamily}-${style.fontSize}-${style.fontWeight}-${style.fontStyle}-${style.color}-${style.textAlign}-${style.lineHeight}-${style.fillType ?? 'solid'}-${style.strokeColor ?? ''}-${style.strokeWidth ?? 0}-${JSON.stringify(style.gradient ?? {})}-${JSON.stringify(style.textShadow ?? {})}`;
+  } else if (layer.type === 'shape') {
+    const shapeLayer = layer as ShapeLayer;
+    const { shapeType, shapeStyle } = shapeLayer;
+    contentHash = `shp-${shapeType}-${shapeStyle.fill ?? ''}-${shapeStyle.stroke ?? ''}-${shapeStyle.strokeWidth}-${shapeStyle.fillOpacity}-${shapeStyle.strokeOpacity}-${shapeStyle.cornerRadius}-${shapeStyle.fillType ?? 'solid'}-${JSON.stringify(shapeStyle.gradient ?? {})}-${shapeLayer.sides ?? 0}-${shapeLayer.innerRadius ?? 0}`;
+  }
+
+  return `${baseHash}|${shadowHash}|${innerShadowHash}|${glowHash}|${contentHash}`;
+}
+
+function getCachedLayerCanvas(
+  layer: Layer,
+  project: { assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
+): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas === 'undefined') return null;
+
+  const { width, height } = layer.transform;
+  if (width <= 0 || height <= 0) return null;
+
+  const hash = getLayerHash(layer, project.assets);
+  const cached = layerCache.get(layer.id);
+
+  if (cached && cached.hash === hash && cached.width === Math.ceil(width) && cached.height === Math.ceil(height)) {
+    const idx = layerCacheOrder.indexOf(layer.id);
+    if (idx > -1) {
+      layerCacheOrder.splice(idx, 1);
+      layerCacheOrder.push(layer.id);
+    }
+    return cached.canvas;
+  }
+
+  return null;
+}
+
+function setCachedLayerCanvas(
+  layerId: string,
+  canvas: OffscreenCanvas,
+  hash: string,
+  width: number,
+  height: number
+): void {
+  if (layerCache.size >= MAX_LAYER_CACHE_SIZE && !layerCache.has(layerId)) {
+    const oldest = layerCacheOrder.shift();
+    if (oldest) {
+      layerCache.delete(oldest);
+    }
+  }
+
+  const existingIdx = layerCacheOrder.indexOf(layerId);
+  if (existingIdx > -1) {
+    layerCacheOrder.splice(existingIdx, 1);
+  }
+  layerCacheOrder.push(layerId);
+
+  layerCache.set(layerId, { canvas, hash, width, height });
+}
+
+function clearLayerCache(layerIds?: Set<string>): void {
+  if (!layerIds) {
+    layerCache.clear();
+    layerCacheOrder.length = 0;
+    return;
+  }
+
+  const toRemove: string[] = [];
+  layerCache.forEach((_, id) => {
+    if (!layerIds.has(id)) {
+      toRemove.push(id);
+    }
+  });
+
+  toRemove.forEach((id) => {
+    layerCache.delete(id);
+    const idx = layerCacheOrder.indexOf(id);
+    if (idx > -1) {
+      layerCacheOrder.splice(idx, 1);
+    }
+  });
+}
+
 function getCachedImage(src: string): HTMLImageElement | null {
   if (!src) return null;
 
@@ -484,6 +598,12 @@ export function Canvas() {
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
   }, [forceRender]);
+
+  useEffect(() => {
+    if (!project) return;
+    const currentLayerIds = new Set(Object.keys(project.layers));
+    clearLayerCache(currentLayerIds);
+  }, [project?.layers]);
 
   const screenToCanvas = useCallback(
     (screenX: number, screenY: number) => {
@@ -1264,15 +1384,75 @@ function renderLayerWithChildren(
   }
 }
 
+type RenderContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+function renderLayerToOffscreen(
+  layer: Layer,
+  project: { assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
+): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas === 'undefined') return null;
+
+  const { width, height } = layer.transform;
+  const ceilWidth = Math.ceil(width);
+  const ceilHeight = Math.ceil(height);
+
+  if (ceilWidth <= 0 || ceilHeight <= 0) return null;
+
+  const shadow = layer.shadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 0, offsetY: 4 };
+  const innerShadow = layer.innerShadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 2, offsetY: 2 };
+  const glow = layer.glow ?? { enabled: false, color: '#ffffff', blur: 20, intensity: 1 };
+
+  const padding = Math.max(
+    shadow.enabled ? shadow.blur + Math.abs(shadow.offsetX) + Math.abs(shadow.offsetY) : 0,
+    glow.enabled ? glow.blur * (glow.intensity ?? 1) * 2 : 0
+  );
+
+  const offscreen = new OffscreenCanvas(ceilWidth + padding * 2, ceilHeight + padding * 2);
+  const offCtx = offscreen.getContext('2d') as RenderContext | null;
+  if (!offCtx) return null;
+
+  offCtx.translate(padding, padding);
+
+  if (glow.enabled && glow.blur > 0) {
+    offCtx.save();
+    offCtx.shadowColor = glow.color;
+    offCtx.shadowBlur = glow.blur * (glow.intensity ?? 1);
+    offCtx.shadowOffsetX = 0;
+    offCtx.shadowOffsetY = 0;
+
+    for (let i = 0; i < 3; i++) {
+      renderLayerContentInternal(offCtx, layer, project);
+    }
+    offCtx.restore();
+  }
+
+  if (shadow.enabled) {
+    offCtx.shadowColor = shadow.color;
+    offCtx.shadowBlur = shadow.blur;
+    offCtx.shadowOffsetX = shadow.offsetX;
+    offCtx.shadowOffsetY = shadow.offsetY;
+  }
+
+  renderLayerContentInternal(offCtx, layer, project);
+
+  offCtx.shadowColor = 'transparent';
+  offCtx.shadowBlur = 0;
+  offCtx.shadowOffsetX = 0;
+  offCtx.shadowOffsetY = 0;
+
+  if (innerShadow.enabled && innerShadow.blur > 0) {
+    renderInnerShadowInternal(offCtx, layer, innerShadow);
+  }
+
+  return offscreen;
+}
+
 function renderLayer(
   ctx: CanvasRenderingContext2D,
   layer: Layer,
   project: { layers?: Record<string, Layer>; assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
 ) {
   const { transform } = layer;
-  const shadow = layer.shadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 0, offsetY: 4 };
-  const innerShadow = layer.innerShadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 2, offsetY: 2 };
-  const glow = layer.glow ?? { enabled: false, color: '#ffffff', blur: 20, intensity: 1 };
   const blendMode = layer.blendMode?.mode ?? 'normal';
 
   ctx.save();
@@ -1288,6 +1468,39 @@ function renderLayer(
 
   ctx.globalAlpha = transform.opacity;
   ctx.globalCompositeOperation = BLEND_MODE_MAP[blendMode] ?? 'source-over';
+
+  const cachedCanvas = getCachedLayerCanvas(layer, project);
+  if (cachedCanvas) {
+    const shadow = layer.shadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 0, offsetY: 4 };
+    const glow = layer.glow ?? { enabled: false, color: '#ffffff', blur: 20, intensity: 1 };
+    const padding = Math.max(
+      shadow.enabled ? shadow.blur + Math.abs(shadow.offsetX) + Math.abs(shadow.offsetY) : 0,
+      glow.enabled ? glow.blur * (glow.intensity ?? 1) * 2 : 0
+    );
+    ctx.drawImage(cachedCanvas, -padding, -padding);
+    ctx.restore();
+    return;
+  }
+
+  const offscreen = renderLayerToOffscreen(layer, project);
+  if (offscreen) {
+    const hash = getLayerHash(layer, project.assets);
+    setCachedLayerCanvas(layer.id, offscreen, hash, Math.ceil(transform.width), Math.ceil(transform.height));
+
+    const shadow = layer.shadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 0, offsetY: 4 };
+    const glow = layer.glow ?? { enabled: false, color: '#ffffff', blur: 20, intensity: 1 };
+    const padding = Math.max(
+      shadow.enabled ? shadow.blur + Math.abs(shadow.offsetX) + Math.abs(shadow.offsetY) : 0,
+      glow.enabled ? glow.blur * (glow.intensity ?? 1) * 2 : 0
+    );
+    ctx.drawImage(offscreen, -padding, -padding);
+    ctx.restore();
+    return;
+  }
+
+  const shadow = layer.shadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 0, offsetY: 4 };
+  const innerShadow = layer.innerShadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 2, offsetY: 2 };
+  const glow = layer.glow ?? { enabled: false, color: '#ffffff', blur: 20, intensity: 1 };
 
   if (glow.enabled && glow.blur > 0) {
     ctx.save();
@@ -1328,21 +1541,37 @@ function renderLayerContent(
   layer: Layer,
   project: { assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
 ) {
+  renderLayerContentInternal(ctx, layer, project);
+}
+
+function renderLayerContentInternal(
+  ctx: RenderContext,
+  layer: Layer,
+  project: { assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
+) {
   switch (layer.type) {
     case 'image':
-      renderImageLayer(ctx, layer as ImageLayer, project);
+      renderImageLayerInternal(ctx, layer as ImageLayer, project);
       break;
     case 'text':
-      renderTextLayer(ctx, layer as TextLayer);
+      renderTextLayerInternal(ctx, layer as TextLayer);
       break;
     case 'shape':
-      renderShapeLayer(ctx, layer as ShapeLayer);
+      renderShapeLayerInternal(ctx, layer as ShapeLayer);
       break;
   }
 }
 
 function renderInnerShadow(
   ctx: CanvasRenderingContext2D,
+  layer: Layer,
+  innerShadow: { color: string; blur: number; offsetX: number; offsetY: number }
+) {
+  renderInnerShadowInternal(ctx, layer, innerShadow);
+}
+
+function renderInnerShadowInternal(
+  ctx: RenderContext,
   layer: Layer,
   innerShadow: { color: string; blur: number; offsetX: number; offsetY: number }
 ) {
@@ -1382,7 +1611,7 @@ function renderInnerShadow(
 }
 
 function applyMotionBlur(
-  ctx: CanvasRenderingContext2D,
+  ctx: RenderContext,
   img: HTMLImageElement,
   width: number,
   height: number,
@@ -1403,7 +1632,7 @@ function applyMotionBlur(
 }
 
 function applyRadialBlur(
-  ctx: CanvasRenderingContext2D,
+  ctx: RenderContext,
   img: HTMLImageElement,
   width: number,
   height: number,
@@ -1428,8 +1657,8 @@ function applyRadialBlur(
   ctx.globalAlpha = 1;
 }
 
-function renderImageLayer(
-  ctx: CanvasRenderingContext2D,
+function renderImageLayerInternal(
+  ctx: RenderContext,
   layer: ImageLayer,
   project: { assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
 ) {
@@ -1545,7 +1774,7 @@ function renderImageLayer(
   }
 }
 
-function renderTextLayer(ctx: CanvasRenderingContext2D, layer: TextLayer) {
+function renderTextLayerInternal(ctx: RenderContext, layer: TextLayer) {
   const { style, content, transform } = layer;
   const flipH = layer.flipHorizontal ?? false;
   const flipV = layer.flipVertical ?? false;
@@ -1678,7 +1907,7 @@ function renderTextLayer(ctx: CanvasRenderingContext2D, layer: TextLayer) {
   }
 }
 
-function renderShapeLayer(ctx: CanvasRenderingContext2D, layer: ShapeLayer) {
+function renderShapeLayerInternal(ctx: RenderContext, layer: ShapeLayer) {
   const { shapeType, shapeStyle, transform } = layer;
   const { width, height } = transform;
   const flipH = layer.flipHorizontal ?? false;
