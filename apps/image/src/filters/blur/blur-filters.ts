@@ -249,6 +249,7 @@ export function applyRadialBlur(imageData: ImageData, settings: RadialBlurSettin
 function createBokehKernel(radius: number, shape: number, rotation: number): Array<{ x: number; y: number; weight: number }> {
   const kernel: Array<{ x: number; y: number; weight: number }> = [];
   const rotRad = (rotation * Math.PI) / 180;
+  const safeShape = Math.max(3, Math.round(shape));
 
   for (let y = -radius; y <= radius; y++) {
     for (let x = -radius; x <= radius; x++) {
@@ -256,8 +257,9 @@ function createBokehKernel(radius: number, shape: number, rotation: number): Arr
       const ry = x * Math.sin(rotRad) + y * Math.cos(rotRad);
 
       const angle = Math.atan2(ry, rx);
-      const angleStep = (2 * Math.PI) / shape;
-      const polygonRadius = radius / Math.cos((angle % angleStep) - angleStep / 2);
+      const angleStep = (2 * Math.PI) / safeShape;
+      const cosValue = Math.cos((angle % angleStep) - angleStep / 2);
+      const polygonRadius = Math.abs(cosValue) > 0.001 ? radius / cosValue : radius;
 
       const dist = Math.sqrt(rx * rx + ry * ry);
       if (dist <= Math.abs(polygonRadius)) {
@@ -266,8 +268,12 @@ function createBokehKernel(radius: number, shape: number, rotation: number): Arr
     }
   }
 
-  const totalWeight = kernel.length;
-  kernel.forEach(k => k.weight /= totalWeight);
+  if (kernel.length === 0) {
+    kernel.push({ x: 0, y: 0, weight: 1 });
+  } else {
+    const totalWeight = kernel.length;
+    kernel.forEach(k => k.weight /= totalWeight);
+  }
 
   return kernel;
 }
@@ -292,7 +298,7 @@ export function applyLensBlur(imageData: ImageData, settings: LensBlurSettings):
         const luminance = (data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114);
         let weight = k.weight;
 
-        if (luminance > settings.highlightThreshold) {
+        if (luminance > settings.highlightThreshold && settings.highlightThreshold < 255) {
           weight *= 1 + (settings.highlightBrightness / 100) * ((luminance - settings.highlightThreshold) / (255 - settings.highlightThreshold));
         }
 
@@ -304,10 +310,17 @@ export function applyLensBlur(imageData: ImageData, settings: LensBlurSettings):
       }
 
       const idx = (y * width + x) * 4;
-      resultData[idx] = Math.min(255, r / totalWeight);
-      resultData[idx + 1] = Math.min(255, g / totalWeight);
-      resultData[idx + 2] = Math.min(255, b / totalWeight);
-      resultData[idx + 3] = a / totalWeight;
+      if (totalWeight > 0) {
+        resultData[idx] = Math.min(255, r / totalWeight);
+        resultData[idx + 1] = Math.min(255, g / totalWeight);
+        resultData[idx + 2] = Math.min(255, b / totalWeight);
+        resultData[idx + 3] = a / totalWeight;
+      } else {
+        resultData[idx] = data[idx];
+        resultData[idx + 1] = data[idx + 1];
+        resultData[idx + 2] = data[idx + 2];
+        resultData[idx + 3] = data[idx + 3];
+      }
     }
   }
 
