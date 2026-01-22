@@ -20,6 +20,13 @@ const ShapeSection = lazy(() => import('./ShapeSection').then(m => ({ default: m
 const LevelsSection = lazy(() => import('./LevelsSection').then(m => ({ default: m.LevelsSection })));
 const CurvesSection = lazy(() => import('./CurvesSection').then(m => ({ default: m.CurvesSection })));
 const ColorBalanceSection = lazy(() => import('./ColorBalanceSection').then(m => ({ default: m.ColorBalanceSection })));
+const SelectiveColorSection = lazy(() => import('./SelectiveColorSection').then(m => ({ default: m.SelectiveColorSection })));
+const BlackWhiteSection = lazy(() => import('./BlackWhiteSection').then(m => ({ default: m.BlackWhiteSection })));
+const PhotoFilterSection = lazy(() => import('./PhotoFilterSection').then(m => ({ default: m.PhotoFilterSection })));
+const ChannelMixerSection = lazy(() => import('./ChannelMixerSection').then(m => ({ default: m.ChannelMixerSection })));
+const GradientMapSection = lazy(() => import('./GradientMapSection').then(m => ({ default: m.GradientMapSection })));
+const PosterizeSection = lazy(() => import('./PosterizeSection').then(m => ({ default: m.PosterizeSection })));
+const ThresholdSection = lazy(() => import('./ThresholdSection').then(m => ({ default: m.ThresholdSection })));
 const MaskSection = lazy(() => import('./MaskSection').then(m => ({ default: m.MaskSection })));
 const SelectionToolsPanel = lazy(() => import('./SelectionToolsPanel').then(m => ({ default: m.SelectionToolsPanel })));
 const EraserToolPanel = lazy(() => import('./EraserToolPanel').then(m => ({ default: m.EraserToolPanel })));
@@ -147,6 +154,13 @@ function InspectorContent() {
           <LevelsSection layer={singleLayer} />
           <CurvesSection layer={singleLayer} />
           <ColorBalanceSection layer={singleLayer} />
+          <SelectiveColorSection layer={singleLayer} />
+          <BlackWhiteSection layer={singleLayer} />
+          <PhotoFilterSection layer={singleLayer} />
+          <ChannelMixerSection layer={singleLayer} />
+          <GradientMapSection layer={singleLayer} />
+          <PosterizeSection layer={singleLayer} />
+          <ThresholdSection layer={singleLayer} />
         </Suspense>
       )}
 

@@ -6,6 +6,7 @@ import { calculateSnap } from '../../../utils/snapping';
 import type { Layer, ImageLayer, TextLayer, ShapeLayer, GroupLayer } from '../../../types/project';
 import { Rulers } from './Rulers';
 import { ContextMenu, type ContextMenuPosition, type ContextMenuType } from './ContextMenu';
+import { hasActiveAdjustments, applyAllAdjustments, type LayerAdjustments } from '../../../utils/apply-adjustments';
 
 const RULER_SIZE = 20;
 const HANDLE_SIZE = 8;
@@ -1691,6 +1692,21 @@ function renderImageLayerInternal(
   const flipH = layer.flipHorizontal ?? false;
   const flipV = layer.flipVertical ?? false;
 
+  const adjustments: LayerAdjustments = {
+    levels: layer.levels,
+    curves: layer.curves,
+    colorBalance: layer.colorBalance,
+    selectiveColor: layer.selectiveColor,
+    blackWhite: layer.blackWhite,
+    photoFilter: layer.photoFilter,
+    channelMixer: layer.channelMixer,
+    gradientMap: layer.gradientMap,
+    posterize: layer.posterize,
+    threshold: layer.threshold,
+  };
+
+  const needsAdjustments = hasActiveAdjustments(adjustments);
+
   if (flipH || flipV) {
     ctx.save();
     ctx.translate(
@@ -1700,60 +1716,87 @@ function renderImageLayerInternal(
     ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
   }
 
-  {
-    const { filters } = layer;
-    const filterParts: string[] = [];
+  const { filters } = layer;
+  const filterParts: string[] = [];
 
-    let effectiveBrightness = filters.brightness;
-    if (filters.exposure !== 0) {
-      effectiveBrightness = effectiveBrightness * (1 + filters.exposure / 100);
-    }
-    if (filters.highlights > 0) {
-      effectiveBrightness = effectiveBrightness * (1 + filters.highlights / 200);
-    }
-    if (filters.shadows > 0) {
-      effectiveBrightness = effectiveBrightness * (1 + filters.shadows / 300);
-    }
-    if (effectiveBrightness !== 100) {
-      filterParts.push(`brightness(${Math.round(effectiveBrightness)}%)`);
-    }
+  let effectiveBrightness = filters.brightness;
+  if (filters.exposure !== 0) {
+    effectiveBrightness = effectiveBrightness * (1 + filters.exposure / 100);
+  }
+  if (filters.highlights > 0) {
+    effectiveBrightness = effectiveBrightness * (1 + filters.highlights / 200);
+  }
+  if (filters.shadows > 0) {
+    effectiveBrightness = effectiveBrightness * (1 + filters.shadows / 300);
+  }
+  if (effectiveBrightness !== 100) {
+    filterParts.push(`brightness(${Math.round(effectiveBrightness)}%)`);
+  }
 
-    let effectiveContrast = filters.contrast;
-    if (filters.clarity !== 0) {
-      effectiveContrast = effectiveContrast * (1 + filters.clarity / 150);
-    }
-    if (filters.highlights < 0) {
-      effectiveContrast = effectiveContrast * (1 + filters.highlights / 400);
-    }
-    if (filters.shadows < 0) {
-      effectiveContrast = effectiveContrast * (1 + filters.shadows / 400);
-    }
-    if (effectiveContrast !== 100) {
-      filterParts.push(`contrast(${Math.round(effectiveContrast)}%)`);
-    }
+  let effectiveContrast = filters.contrast;
+  if (filters.clarity !== 0) {
+    effectiveContrast = effectiveContrast * (1 + filters.clarity / 150);
+  }
+  if (filters.highlights < 0) {
+    effectiveContrast = effectiveContrast * (1 + filters.highlights / 400);
+  }
+  if (filters.shadows < 0) {
+    effectiveContrast = effectiveContrast * (1 + filters.shadows / 400);
+  }
+  if (effectiveContrast !== 100) {
+    filterParts.push(`contrast(${Math.round(effectiveContrast)}%)`);
+  }
 
-    let effectiveSaturation = filters.saturation;
-    if (filters.vibrance !== 0) {
-      effectiveSaturation = effectiveSaturation * (1 + filters.vibrance / 150);
-    }
-    if (effectiveSaturation !== 100) {
-      filterParts.push(`saturate(${Math.round(effectiveSaturation)}%)`);
-    }
+  let effectiveSaturation = filters.saturation;
+  if (filters.vibrance !== 0) {
+    effectiveSaturation = effectiveSaturation * (1 + filters.vibrance / 150);
+  }
+  if (effectiveSaturation !== 100) {
+    filterParts.push(`saturate(${Math.round(effectiveSaturation)}%)`);
+  }
 
-    if (filters.hue !== 0) {
-      filterParts.push(`hue-rotate(${filters.hue}deg)`);
-    }
-    if (filters.sepia > 0) {
-      filterParts.push(`sepia(${filters.sepia}%)`);
-    }
-    if (filters.invert > 0) {
-      filterParts.push(`invert(${filters.invert}%)`);
-    }
+  if (filters.hue !== 0) {
+    filterParts.push(`hue-rotate(${filters.hue}deg)`);
+  }
+  if (filters.sepia > 0) {
+    filterParts.push(`sepia(${filters.sepia}%)`);
+  }
+  if (filters.invert > 0) {
+    filterParts.push(`invert(${filters.invert}%)`);
+  }
 
-    if (filters.blur > 0 && filters.blurType === 'gaussian') {
-      filterParts.push(`blur(${filters.blur}px)`);
-    }
+  if (filters.blur > 0 && filters.blurType === 'gaussian') {
+    filterParts.push(`blur(${filters.blur}px)`);
+  }
 
+  const width = Math.ceil(layer.transform.width);
+  const height = Math.ceil(layer.transform.height);
+
+  if (needsAdjustments && typeof OffscreenCanvas !== 'undefined' && width > 0 && height > 0) {
+    const tempCanvas = new OffscreenCanvas(width, height);
+    const tempCtx = tempCanvas.getContext('2d');
+    if (tempCtx) {
+      if (filterParts.length > 0) {
+        tempCtx.filter = filterParts.join(' ');
+      }
+
+      if (filters.blur > 0 && filters.blurType === 'motion') {
+        applyMotionBlur(tempCtx, img, width, height, filters.blur, filters.blurAngle);
+      } else if (filters.blur > 0 && filters.blurType === 'radial') {
+        applyRadialBlur(tempCtx, img, width, height, filters.blur);
+      } else {
+        tempCtx.drawImage(img, 0, 0, width, height);
+      }
+
+      tempCtx.filter = 'none';
+
+      let imageData = tempCtx.getImageData(0, 0, width, height);
+      imageData = applyAllAdjustments(imageData, adjustments);
+      tempCtx.putImageData(imageData, 0, 0);
+
+      ctx.drawImage(tempCanvas, 0, 0, layer.transform.width, layer.transform.height);
+    }
+  } else {
     if (filterParts.length > 0) {
       ctx.filter = filterParts.join(' ');
     }

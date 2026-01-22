@@ -23,6 +23,13 @@ import {
   DEFAULT_LEVELS,
   DEFAULT_CURVES,
   DEFAULT_COLOR_BALANCE,
+  DEFAULT_SELECTIVE_COLOR,
+  DEFAULT_BLACK_WHITE,
+  DEFAULT_PHOTO_FILTER,
+  DEFAULT_CHANNEL_MIXER,
+  DEFAULT_GRADIENT_MAP,
+  DEFAULT_POSTERIZE,
+  DEFAULT_THRESHOLD,
   CanvasSize,
   CanvasBackground,
 } from '../types/project';
@@ -249,6 +256,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
                 levels: { ...DEFAULT_LEVELS },
                 curves: { ...DEFAULT_CURVES },
                 colorBalance: { ...DEFAULT_COLOR_BALANCE },
+                selectiveColor: { ...DEFAULT_SELECTIVE_COLOR },
+                blackWhite: { ...DEFAULT_BLACK_WHITE },
+                photoFilter: { ...DEFAULT_PHOTO_FILTER },
+                channelMixer: { ...DEFAULT_CHANNEL_MIXER },
+                gradientMap: { ...DEFAULT_GRADIENT_MAP },
+                posterize: { ...DEFAULT_POSTERIZE },
+                threshold: { ...DEFAULT_THRESHOLD },
               };
               state.project.layers[id] = layer;
               artboard.layerIds.unshift(id);
@@ -298,6 +312,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
                 levels: { ...DEFAULT_LEVELS },
                 curves: { ...DEFAULT_CURVES },
                 colorBalance: { ...DEFAULT_COLOR_BALANCE },
+                selectiveColor: { ...DEFAULT_SELECTIVE_COLOR },
+                blackWhite: { ...DEFAULT_BLACK_WHITE },
+                photoFilter: { ...DEFAULT_PHOTO_FILTER },
+                channelMixer: { ...DEFAULT_CHANNEL_MIXER },
+                gradientMap: { ...DEFAULT_GRADIENT_MAP },
+                posterize: { ...DEFAULT_POSTERIZE },
+                threshold: { ...DEFAULT_THRESHOLD },
               };
               state.project.layers[id] = layer;
               artboard.layerIds.unshift(id);
@@ -346,6 +367,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
                 levels: { ...DEFAULT_LEVELS },
                 curves: { ...DEFAULT_CURVES },
                 colorBalance: { ...DEFAULT_COLOR_BALANCE },
+                selectiveColor: { ...DEFAULT_SELECTIVE_COLOR },
+                blackWhite: { ...DEFAULT_BLACK_WHITE },
+                photoFilter: { ...DEFAULT_PHOTO_FILTER },
+                channelMixer: { ...DEFAULT_CHANNEL_MIXER },
+                gradientMap: { ...DEFAULT_GRADIENT_MAP },
+                posterize: { ...DEFAULT_POSTERIZE },
+                threshold: { ...DEFAULT_THRESHOLD },
               };
               state.project.layers[id] = layer;
               artboard.layerIds.unshift(id);
@@ -411,6 +439,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
                 levels: { ...DEFAULT_LEVELS },
                 curves: { ...DEFAULT_CURVES },
                 colorBalance: { ...DEFAULT_COLOR_BALANCE },
+                selectiveColor: { ...DEFAULT_SELECTIVE_COLOR },
+                blackWhite: { ...DEFAULT_BLACK_WHITE },
+                photoFilter: { ...DEFAULT_PHOTO_FILTER },
+                channelMixer: { ...DEFAULT_CHANNEL_MIXER },
+                gradientMap: { ...DEFAULT_GRADIENT_MAP },
+                posterize: { ...DEFAULT_POSTERIZE },
+                threshold: { ...DEFAULT_THRESHOLD },
               };
               state.project.layers[id] = layer;
               artboard.layerIds.unshift(id);
@@ -484,6 +519,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
                 levels: { ...DEFAULT_LEVELS },
                 curves: { ...DEFAULT_CURVES },
                 colorBalance: { ...DEFAULT_COLOR_BALANCE },
+                selectiveColor: { ...DEFAULT_SELECTIVE_COLOR },
+                blackWhite: { ...DEFAULT_BLACK_WHITE },
+                photoFilter: { ...DEFAULT_PHOTO_FILTER },
+                channelMixer: { ...DEFAULT_CHANNEL_MIXER },
+                gradientMap: { ...DEFAULT_GRADIENT_MAP },
+                posterize: { ...DEFAULT_POSTERIZE },
+                threshold: { ...DEFAULT_THRESHOLD },
               };
 
               state.project.layers[id] = layer;

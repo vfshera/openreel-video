@@ -3,6 +3,13 @@ import type {
   LevelsAdjustment,
   CurvesAdjustment,
   ColorBalanceAdjustment,
+  SelectiveColorAdjustment,
+  BlackWhiteAdjustment,
+  PhotoFilterAdjustment,
+  ChannelMixerAdjustment,
+  GradientMapAdjustment,
+  PosterizeAdjustment,
+  ThresholdAdjustment,
 } from './adjustments';
 
 export type LayerType = 'image' | 'text' | 'shape' | 'group';
@@ -97,6 +104,13 @@ export interface BaseLayer {
   levels: LevelsAdjustment;
   curves: CurvesAdjustment;
   colorBalance: ColorBalanceAdjustment;
+  selectiveColor: SelectiveColorAdjustment;
+  blackWhite: BlackWhiteAdjustment;
+  photoFilter: PhotoFilterAdjustment;
+  channelMixer: ChannelMixerAdjustment;
+  gradientMap: GradientMapAdjustment;
+  posterize: PosterizeAdjustment;
+  threshold: ThresholdAdjustment;
 }
 
 export interface ImageLayer extends BaseLayer {
@@ -312,7 +326,18 @@ export const DEFAULT_INNER_SHADOW: InnerShadow = {
 };
 
 export { DEFAULT_LAYER_MASK } from './mask';
-export { DEFAULT_LEVELS, DEFAULT_CURVES, DEFAULT_COLOR_BALANCE } from './adjustments';
+export {
+  DEFAULT_LEVELS,
+  DEFAULT_CURVES,
+  DEFAULT_COLOR_BALANCE,
+  DEFAULT_SELECTIVE_COLOR,
+  DEFAULT_BLACK_WHITE,
+  DEFAULT_PHOTO_FILTER,
+  DEFAULT_CHANNEL_MIXER,
+  DEFAULT_GRADIENT_MAP,
+  DEFAULT_POSTERIZE,
+  DEFAULT_THRESHOLD,
+} from './adjustments';
 
 export const DEFAULT_FILTER: Filter = {
   brightness: 100,
