@@ -107,10 +107,14 @@ export function createRotateMatrix(angle: number): TransformMatrix {
 }
 
 export function createSkewMatrix(skewX: number, skewY: number): TransformMatrix {
+  const maxSkew = Math.PI / 2 - 0.01;
+  const clampedSkewX = Math.max(-maxSkew, Math.min(maxSkew, skewX));
+  const clampedSkewY = Math.max(-maxSkew, Math.min(maxSkew, skewY));
+
   return {
     a: 1,
-    b: Math.tan(skewY),
-    c: Math.tan(skewX),
+    b: Math.tan(clampedSkewY),
+    c: Math.tan(clampedSkewX),
     d: 1,
     e: 0,
     f: 0,

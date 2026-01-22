@@ -52,13 +52,14 @@ export function createDisplacementMesh(
   height: number,
   cellSize: number = 8
 ): DisplacementMesh {
-  const cols = Math.ceil(width / cellSize) + 1;
-  const rows = Math.ceil(height / cellSize) + 1;
+  const safeCellSize = Math.max(1, cellSize);
+  const cols = Math.ceil(width / safeCellSize) + 1;
+  const rows = Math.ceil(height / safeCellSize) + 1;
 
   return {
     width,
     height,
-    cellSize,
+    cellSize: safeCellSize,
     cols,
     rows,
     displacements: new Float32Array(cols * rows * 2),
@@ -127,7 +128,7 @@ function setFrozen(mesh: DisplacementMesh, col: number, row: number, frozen: boo
 }
 
 function brushFalloff(distance: number, radius: number, density: number): number {
-  if (distance >= radius) return 0;
+  if (radius <= 0 || distance >= radius) return 0;
 
   const normalized = distance / radius;
   const densityFactor = density / 100;

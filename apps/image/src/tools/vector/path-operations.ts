@@ -220,7 +220,8 @@ export function offsetPath(path: VectorPath, distance: number): VectorPath {
     const cross = normPrev.x * normNext.y - normPrev.y * normNext.x;
     const dot = normPrev.x * normNext.x + normPrev.y * normNext.y;
     const halfAngle = Math.acos(Math.max(-1, Math.min(1, dot))) / 2;
-    const miterLength = distance / Math.cos(halfAngle);
+    const cosHalfAngle = Math.cos(halfAngle);
+    const miterLength = cosHalfAngle > 0.01 ? distance / cosHalfAngle : distance * 10;
 
     const sign = cross >= 0 ? 1 : -1;
     const offsetX = (bisector.x / bisectorLen) * miterLength * sign;

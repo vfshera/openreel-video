@@ -53,29 +53,31 @@ export function createWarpGrid(
   rows: number = 4,
   cols: number = 4
 ): WarpGrid {
+  const safeRows = Math.max(1, Math.round(rows));
+  const safeCols = Math.max(1, Math.round(cols));
   const points: WarpPoint[][] = [];
 
-  for (let row = 0; row <= rows; row++) {
+  for (let row = 0; row <= safeRows; row++) {
     const rowPoints: WarpPoint[] = [];
-    for (let col = 0; col <= cols; col++) {
-      const x = (col / cols) * width;
-      const y = (row / rows) * height;
+    for (let col = 0; col <= safeCols; col++) {
+      const x = (col / safeCols) * width;
+      const y = (row / safeRows) * height;
 
-      const handleOffset = Math.min(width / cols, height / rows) * 0.3;
+      const handleOffset = Math.min(width / safeCols, height / safeRows) * 0.3;
 
       rowPoints.push({
         x,
         y,
         handleLeft: col > 0 ? { x: x - handleOffset, y } : null,
-        handleRight: col < cols ? { x: x + handleOffset, y } : null,
+        handleRight: col < safeCols ? { x: x + handleOffset, y } : null,
         handleTop: row > 0 ? { x, y: y - handleOffset } : null,
-        handleBottom: row < rows ? { x, y: y + handleOffset } : null,
+        handleBottom: row < safeRows ? { x, y: y + handleOffset } : null,
       });
     }
     points.push(rowPoints);
   }
 
-  return { rows, cols, points };
+  return { rows: safeRows, cols: safeCols, points };
 }
 
 export function applyWarpPreset(
@@ -272,11 +274,15 @@ function bicubicInterpolate(
 ): { x: number; y: number } {
   const { rows, cols, points } = grid;
 
+  if (rows < 1 || cols < 1 || points.length === 0 || points[0].length === 0) {
+    return { x: 0, y: 0 };
+  }
+
   const colF = u * cols;
   const rowF = v * rows;
 
-  const col = Math.min(Math.floor(colF), cols - 1);
-  const row = Math.min(Math.floor(rowF), rows - 1);
+  const col = Math.max(0, Math.min(Math.floor(colF), cols - 1));
+  const row = Math.max(0, Math.min(Math.floor(rowF), rows - 1));
 
   const localU = colF - col;
   const localV = rowF - row;
