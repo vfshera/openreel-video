@@ -54,6 +54,11 @@ export interface Filter {
   contrast: number;
   saturation: number;
   hue: number;
+  exposure: number;
+  vibrance: number;
+  highlights: number;
+  shadows: number;
+  clarity: number;
   blur: number;
   blurType: BlurType;
   blurAngle: number;
@@ -299,6 +304,11 @@ export const DEFAULT_FILTER: Filter = {
   contrast: 100,
   saturation: 100,
   hue: 0,
+  exposure: 0,
+  vibrance: 0,
+  highlights: 0,
+  shadows: 0,
+  clarity: 0,
   blur: 0,
   blurType: 'gaussian',
   blurAngle: 0,

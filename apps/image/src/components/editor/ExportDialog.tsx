@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Download, FileImage, Loader2, Link2, Link2Off, Printer } from 'lucide-react';
+import { Download, FileImage, Loader2, Link2, Link2Off, Printer, Instagram, Youtube, Twitter, Linkedin, Facebook, Image } from 'lucide-react';
 import { Dialog, DialogFooter } from '../ui/Dialog';
 import { useProjectStore } from '../../stores/project-store';
 import { useUIStore } from '../../stores/ui-store';
@@ -53,6 +53,91 @@ const DPI_OPTIONS = [
   { value: 600, label: '600 DPI', description: 'High quality' },
 ];
 
+type PlatformPreset = {
+  id: string;
+  name: string;
+  icon: React.ElementType;
+  format: ExportFormat;
+  quality: ExportQuality;
+  maxFileSize?: string;
+  recommendedSize?: { width: number; height: number };
+  description: string;
+};
+
+const PLATFORM_PRESETS: PlatformPreset[] = [
+  {
+    id: 'instagram-post',
+    name: 'Instagram Post',
+    icon: Instagram,
+    format: 'jpg',
+    quality: 'high',
+    recommendedSize: { width: 1080, height: 1080 },
+    description: 'Square post, max 30MB',
+  },
+  {
+    id: 'instagram-story',
+    name: 'Instagram Story',
+    icon: Instagram,
+    format: 'jpg',
+    quality: 'high',
+    recommendedSize: { width: 1080, height: 1920 },
+    description: '9:16 vertical',
+  },
+  {
+    id: 'youtube-thumbnail',
+    name: 'YouTube Thumbnail',
+    icon: Youtube,
+    format: 'jpg',
+    quality: 'high',
+    maxFileSize: '2MB',
+    recommendedSize: { width: 1280, height: 720 },
+    description: '16:9, under 2MB',
+  },
+  {
+    id: 'twitter-post',
+    name: 'Twitter/X Post',
+    icon: Twitter,
+    format: 'png',
+    quality: 'high',
+    recommendedSize: { width: 1200, height: 675 },
+    description: '16:9 landscape',
+  },
+  {
+    id: 'facebook-post',
+    name: 'Facebook Post',
+    icon: Facebook,
+    format: 'jpg',
+    quality: 'high',
+    recommendedSize: { width: 1200, height: 630 },
+    description: '1.91:1 ratio',
+  },
+  {
+    id: 'linkedin-post',
+    name: 'LinkedIn Post',
+    icon: Linkedin,
+    format: 'png',
+    quality: 'high',
+    recommendedSize: { width: 1200, height: 627 },
+    description: 'Professional feed',
+  },
+  {
+    id: 'web-optimized',
+    name: 'Web Optimized',
+    icon: Image,
+    format: 'webp',
+    quality: 'medium',
+    description: 'Smallest file size',
+  },
+  {
+    id: 'print-ready',
+    name: 'Print Ready',
+    icon: Printer,
+    format: 'png',
+    quality: 'max',
+    description: 'Highest quality PNG',
+  },
+];
+
 type SizeMode = 'scale' | 'custom' | 'dpi';
 
 export function ExportDialog({ open, onClose }: ExportDialogProps) {
@@ -63,6 +148,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [quality, setQuality] = useState<ExportQuality>('high');
   const [scale, setScale] = useState(1);
   const [sizeMode, setSizeMode] = useState<SizeMode>('scale');
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [customWidth, setCustomWidth] = useState(0);
   const [customHeight, setCustomHeight] = useState(0);
   const [dpi, setDpi] = useState(72);
@@ -120,6 +206,35 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
       const aspectRatio = artboard.size.width / artboard.size.height;
       setCustomWidth(Math.round(newHeight * aspectRatio));
     }
+  };
+
+  const handlePresetSelect = (preset: PlatformPreset) => {
+    setSelectedPreset(preset.id);
+    setFormat(preset.format);
+    setQuality(preset.quality);
+
+    if (preset.recommendedSize && artboard) {
+      const artboardRatio = artboard.size.width / artboard.size.height;
+      const presetRatio = preset.recommendedSize.width / preset.recommendedSize.height;
+      const ratioMatch = Math.abs(artboardRatio - presetRatio) < 0.1;
+
+      if (ratioMatch) {
+        const targetScale = preset.recommendedSize.width / artboard.size.width;
+        if (targetScale <= 4 && targetScale >= 0.5) {
+          setScale(targetScale);
+          setSizeMode('scale');
+        } else {
+          setSizeMode('custom');
+          setCustomWidth(preset.recommendedSize.width);
+          setCustomHeight(preset.recommendedSize.height);
+          setLockAspectRatio(false);
+        }
+      }
+    }
+  };
+
+  const clearPreset = () => {
+    setSelectedPreset(null);
   };
 
   const printDimensions = useMemo(() => {
@@ -199,6 +314,43 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
       maxWidth="md"
     >
       <div className="space-y-6">
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Quick Presets
+            </label>
+            {selectedPreset && (
+              <button
+                onClick={clearPreset}
+                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {PLATFORM_PRESETS.map((preset) => {
+              const Icon = preset.icon;
+              const isSelected = selectedPreset === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => handlePresetSelect(preset)}
+                  className={`p-2 rounded-lg border text-center transition-all ${
+                    isSelected
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-border hover:border-muted-foreground/50 hover:bg-secondary/50'
+                  }`}
+                >
+                  <Icon size={16} className={`mx-auto mb-1 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <span className="block text-[10px] font-medium truncate">{preset.name}</span>
+                  <span className="block text-[8px] text-muted-foreground truncate">{preset.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div>
           <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
             Format

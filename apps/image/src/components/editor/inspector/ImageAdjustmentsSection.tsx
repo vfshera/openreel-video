@@ -1,6 +1,6 @@
 import { useProjectStore } from '../../../stores/project-store';
 import type { ImageLayer, Filter, BlurType } from '../../../types/project';
-import { Sun, Contrast, Palette, Thermometer, Focus, Sparkles, CircleDot, Scan, Film, Minus, Move, Target } from 'lucide-react';
+import { Sun, Contrast, Palette, Thermometer, Focus, Sparkles, CircleDot, Scan, Film, Minus, Move, Target, SunMedium, Vibrate, Sunrise, SunDim, Aperture } from 'lucide-react';
 
 interface Props {
   layer: ImageLayer;
@@ -90,6 +90,11 @@ export function ImageAdjustmentsSection({ layer }: Props) {
         contrast: 100,
         saturation: 100,
         hue: 0,
+        exposure: 0,
+        vibrance: 0,
+        highlights: 0,
+        shadows: 0,
+        clarity: 0,
         blur: 0,
         blurType: 'gaussian',
         blurAngle: 0,
@@ -107,6 +112,11 @@ export function ImageAdjustmentsSection({ layer }: Props) {
     layer.filters.contrast !== 100 ||
     layer.filters.saturation !== 100 ||
     layer.filters.hue !== 0 ||
+    layer.filters.exposure !== 0 ||
+    layer.filters.vibrance !== 0 ||
+    layer.filters.highlights !== 0 ||
+    layer.filters.shadows !== 0 ||
+    layer.filters.clarity !== 0 ||
     layer.filters.blur !== 0 ||
     layer.filters.sharpen !== 0 ||
     layer.filters.vignette !== 0 ||
@@ -173,6 +183,56 @@ export function ImageAdjustmentsSection({ layer }: Props) {
           defaultValue={0}
           onChange={(v) => handleFilterChange('hue', v)}
           unit="°"
+        />
+
+        <AdjustmentSlider
+          icon={<SunMedium size={12} />}
+          label="Exposure"
+          value={layer.filters.exposure}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleFilterChange('exposure', v)}
+        />
+
+        <AdjustmentSlider
+          icon={<Vibrate size={12} />}
+          label="Vibrance"
+          value={layer.filters.vibrance}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleFilterChange('vibrance', v)}
+        />
+
+        <AdjustmentSlider
+          icon={<Sunrise size={12} />}
+          label="Highlights"
+          value={layer.filters.highlights}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleFilterChange('highlights', v)}
+        />
+
+        <AdjustmentSlider
+          icon={<SunDim size={12} />}
+          label="Shadows"
+          value={layer.filters.shadows}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleFilterChange('shadows', v)}
+        />
+
+        <AdjustmentSlider
+          icon={<Aperture size={12} />}
+          label="Clarity"
+          value={layer.filters.clarity}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleFilterChange('clarity', v)}
         />
 
         <AdjustmentSlider

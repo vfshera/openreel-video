@@ -406,13 +406,45 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
           if (state.project && state.selectedArtboardId) {
             const artboard = state.project.artboards.find((a) => a.id === state.selectedArtboardId);
             if (artboard && childIds.length > 0) {
+              let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+              childIds.forEach((childId) => {
+                const child = state.project!.layers[childId];
+                if (child) {
+                  const { x, y, width, height } = child.transform;
+                  minX = Math.min(minX, x);
+                  minY = Math.min(minY, y);
+                  maxX = Math.max(maxX, x + width);
+                  maxY = Math.max(maxY, y + height);
+                }
+              });
+
+              const groupX = minX;
+              const groupY = minY;
+              const groupWidth = maxX - minX;
+              const groupHeight = maxY - minY;
+
+              childIds.forEach((childId) => {
+                const child = state.project!.layers[childId];
+                if (child) {
+                  child.transform.x -= groupX;
+                  child.transform.y -= groupY;
+                  child.parentId = id;
+                }
+              });
+
               const layer: GroupLayer = {
                 id,
                 name: 'Group',
                 type: 'group',
                 visible: true,
                 locked: false,
-                transform: DEFAULT_TRANSFORM,
+                transform: {
+                  ...DEFAULT_TRANSFORM,
+                  x: groupX,
+                  y: groupY,
+                  width: groupWidth,
+                  height: groupHeight,
+                },
                 blendMode: DEFAULT_BLEND_MODE,
                 shadow: DEFAULT_SHADOW,
                 innerShadow: DEFAULT_INNER_SHADOW,
@@ -425,12 +457,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
                 childIds,
                 expanded: true,
               };
-              childIds.forEach((childId) => {
-                const child = state.project!.layers[childId];
-                if (child) {
-                  child.parentId = id;
-                }
-              });
+
               state.project.layers[id] = layer;
               const firstChildIndex = artboard.layerIds.findIndex((lid) => childIds.includes(lid));
               artboard.layerIds = artboard.layerIds.filter((lid) => !childIds.includes(lid));
@@ -692,9 +719,12 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(
               const artboard = state.project.artboards.find((a) => a.id === state.selectedArtboardId);
               if (artboard) {
                 const groupIndex = artboard.layerIds.indexOf(groupId);
+                const { x: groupX, y: groupY } = group.transform;
                 group.childIds.forEach((childId) => {
                   const child = state.project!.layers[childId];
                   if (child) {
+                    child.transform.x += groupX;
+                    child.transform.y += groupY;
                     child.parentId = null;
                   }
                 });

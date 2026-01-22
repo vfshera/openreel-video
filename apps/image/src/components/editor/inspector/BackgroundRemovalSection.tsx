@@ -18,8 +18,6 @@ export function BackgroundRemovalSection({ layer }: Props) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [mode, setMode] = useState<BackgroundMode>('transparent');
-  const [threshold, setThreshold] = useState(DEFAULT_OPTIONS.threshold);
-  const [edgeBlur, setEdgeBlur] = useState(DEFAULT_OPTIONS.edgeBlur);
   const [backgroundColor, setBackgroundColor] = useState(DEFAULT_OPTIONS.backgroundColor!);
   const [blurAmount, setBlurAmount] = useState(DEFAULT_OPTIONS.blurAmount!);
 
@@ -39,8 +37,6 @@ export function BackgroundRemovalSection({ layer }: Props) {
         imageUrl,
         {
           mode,
-          threshold,
-          edgeBlur,
           backgroundColor,
           blurAmount,
         },
@@ -129,34 +125,6 @@ export function BackgroundRemovalSection({ layer }: Props) {
           </div>
         )}
 
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-[10px] text-muted-foreground">Sensitivity</label>
-            <span className="text-[10px] text-muted-foreground">{Math.round(threshold * 100)}%</span>
-          </div>
-          <Slider
-            value={[threshold * 100]}
-            onValueChange={([v]) => setThreshold(v / 100)}
-            min={10}
-            max={90}
-            step={5}
-          />
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-[10px] text-muted-foreground">Edge Smoothing</label>
-            <span className="text-[10px] text-muted-foreground">{edgeBlur}px</span>
-          </div>
-          <Slider
-            value={[edgeBlur]}
-            onValueChange={([v]) => setEdgeBlur(v)}
-            min={0}
-            max={10}
-            step={1}
-          />
-        </div>
-
         {isProcessing && (
           <div className="space-y-1.5">
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -166,7 +134,10 @@ export function BackgroundRemovalSection({ layer }: Props) {
               />
             </div>
             <p className="text-[10px] text-muted-foreground text-center">
-              Processing... {Math.round(progress)}%
+              {progress < 15 ? 'Loading AI model...' :
+               progress < 90 ? 'Analyzing image...' :
+               'Finalizing...'}
+              {' '}{Math.round(progress)}%
             </p>
           </div>
         )}
@@ -190,7 +161,7 @@ export function BackgroundRemovalSection({ layer }: Props) {
         </button>
 
         <p className="text-[9px] text-muted-foreground text-center">
-          Works best with solid color backgrounds
+          AI-powered background removal for any image
         </p>
       </div>
     </div>

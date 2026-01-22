@@ -1,21 +1,91 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
-import { useCanvasStore } from '../../../stores/canvas-store';
+import { useCanvasStore, type ResizeHandle } from '../../../stores/canvas-store';
 import { calculateSnap } from '../../../utils/snapping';
-import type { Layer, ImageLayer, TextLayer, ShapeLayer } from '../../../types/project';
+import type { Layer, ImageLayer, TextLayer, ShapeLayer, GroupLayer } from '../../../types/project';
 import { Rulers } from './Rulers';
+import { ContextMenu, type ContextMenuPosition, type ContextMenuType } from './ContextMenu';
 
 const RULER_SIZE = 20;
+const HANDLE_SIZE = 8;
+const ROTATION_HANDLE_DISTANCE = 24;
+
+const imageCache = new Map<string, HTMLImageElement>();
+let renderCallback: (() => void) | null = null;
+
+function getCachedImage(src: string): HTMLImageElement | null {
+  if (!src) return null;
+
+  const cached = imageCache.get(src);
+  if (cached && cached.complete && cached.naturalWidth > 0) {
+    return cached;
+  }
+
+  if (!cached) {
+    const img = new window.Image();
+    img.src = src;
+    imageCache.set(src, img);
+
+    if (!img.complete) {
+      img.onload = () => {
+        if (renderCallback) {
+          renderCallback();
+        }
+      };
+    }
+  }
+
+  const img = imageCache.get(src);
+  if (img && img.complete && img.naturalWidth > 0) {
+    return img;
+  }
+
+  return null;
+}
 
 export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
-  const { project, selectedLayerIds, selectedArtboardId, updateLayerTransform, selectLayer, selectLayers, deselectAllLayers, addPathLayer } = useProjectStore();
-  const { zoom, panX, panY, setPan, activeTool, showGrid, showRulers, gridSize, crop, snapToObjects, snapToGuides, snapToGrid, penSettings, drawing, startDrawing, addDrawingPoint, finishDrawing } = useUIStore();
-  const { setCanvasRef, setContainerRef, startDrag, updateDrag, endDrag, isDragging, dragMode, dragCurrentX, dragCurrentY, guides, smartGuides, setSmartGuides, clearSmartGuides, isMarqueeSelecting, marqueeRect, startMarqueeSelect, updateMarqueeSelect, endMarqueeSelect } = useCanvasStore();
+  const {
+    project,
+    selectedLayerIds,
+    selectedArtboardId,
+    updateLayerTransform,
+    updateLayer,
+    selectLayer,
+    selectLayers,
+    deselectAllLayers,
+    addPathLayer,
+    addTextLayer,
+    addShapeLayer,
+    removeLayer,
+    duplicateLayer,
+    copyLayers,
+    cutLayers,
+    pasteLayers,
+    copiedLayers,
+    copyLayerStyle,
+    pasteLayerStyle,
+    copiedStyle,
+    moveLayerToTop,
+    moveLayerUp,
+    moveLayerDown,
+    moveLayerToBottom,
+    groupLayers,
+    ungroupLayers,
+  } = useProjectStore();
+  const { zoom, panX, panY, setPan, setZoom, activeTool, showGrid, showRulers, toggleGrid, toggleRulers, gridSize, crop, snapToObjects, snapToGuides, snapToGrid, penSettings, drawing, startDrawing, addDrawingPoint, finishDrawing } = useUIStore();
+  const { setCanvasRef, setContainerRef, startDrag, updateDrag, endDrag, isDragging, dragMode, dragStartX, dragStartY, dragCurrentX, dragCurrentY, guides, smartGuides, setSmartGuides, clearSmartGuides, isMarqueeSelecting, marqueeRect, startMarqueeSelect, updateMarqueeSelect, endMarqueeSelect, activeResizeHandle, setActiveResizeHandle } = useCanvasStore();
+  const [cursorStyle, setCursorStyle] = useState('default');
+  const initialTransformRef = useRef<{ x: number; y: number; width: number; height: number; rotation: number } | null>(null);
+
+  const [contextMenu, setContextMenu] = useState<{
+    position: ContextMenuPosition;
+    type: ContextMenuType;
+  } | null>(null);
 
   const artboard = project?.artboards.find((a) => a.id === selectedArtboardId);
 
@@ -90,7 +160,7 @@ export function Canvas() {
     sortedLayerIds.forEach((layerId) => {
       const layer = project.layers[layerId];
       if (!layer || !layer.visible) return;
-      renderLayer(ctx, layer, project);
+      renderLayerWithChildren(ctx, layer, project);
     });
 
     ctx.restore();
@@ -101,15 +171,16 @@ export function Canvas() {
       const { x, y, width, height, rotation } = layer.transform;
 
       ctx.save();
-      ctx.translate(artboardX + x * zoom, artboardY + y * zoom);
+      ctx.translate(artboardX + (x + width / 2) * zoom, artboardY + (y + height / 2) * zoom);
       ctx.rotate((rotation * Math.PI) / 180);
+      ctx.translate(-(width / 2) * zoom, -(height / 2) * zoom);
 
       ctx.strokeStyle = '#22c55e';
       ctx.lineWidth = 2;
       ctx.setLineDash([]);
       ctx.strokeRect(0, 0, width * zoom, height * zoom);
 
-      const handleSize = 8;
+      const handleSize = HANDLE_SIZE;
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#22c55e';
       ctx.lineWidth = 2;
@@ -129,6 +200,21 @@ export function Canvas() {
         ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
         ctx.strokeRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
       });
+
+      ctx.beginPath();
+      ctx.moveTo(width * zoom / 2, 0);
+      ctx.lineTo(width * zoom / 2, -ROTATION_HANDLE_DISTANCE);
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(width * zoom / 2, -ROTATION_HANDLE_DISTANCE, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
       ctx.restore();
     });
@@ -284,6 +370,13 @@ export function Canvas() {
   }, [render]);
 
   useEffect(() => {
+    renderCallback = render;
+    return () => {
+      renderCallback = null;
+    };
+  }, [render]);
+
+  useEffect(() => {
     const handleResize = () => {
       render();
       if (containerRef.current) {
@@ -343,11 +436,90 @@ export function Canvas() {
     [artboard, project]
   );
 
+  const getHandleAtPoint = useCallback(
+    (canvasX: number, canvasY: number): { handle: ResizeHandle | 'rotate'; layerId: string } | null => {
+      if (!artboard || !project || selectedLayerIds.length !== 1) return null;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+
+      const layerId = selectedLayerIds[0];
+      const layer = project.layers[layerId];
+      if (!layer) return null;
+
+      const { x, y, width, height, rotation } = layer.transform;
+
+      const centerX = canvas.width / 2 + panX;
+      const centerY = canvas.height / 2 + panY;
+      const artboardX = centerX - (artboard.size.width * zoom) / 2;
+      const artboardY = centerY - (artboard.size.height * zoom) / 2;
+
+      const layerCenterX = artboardX + (x + width / 2) * zoom;
+      const layerCenterY = artboardY + (y + height / 2) * zoom;
+
+      const rad = -(rotation * Math.PI) / 180;
+      const dx = canvasX - layerCenterX;
+      const dy = canvasY - layerCenterY;
+      const localX = dx * Math.cos(rad) - dy * Math.sin(rad);
+      const localY = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+      const halfW = (width * zoom) / 2;
+      const halfH = (height * zoom) / 2;
+      const threshold = HANDLE_SIZE + 4;
+
+      const rotHandleY = -halfH - ROTATION_HANDLE_DISTANCE;
+      if (Math.abs(localX) < threshold && Math.abs(localY - rotHandleY) < threshold) {
+        return { handle: 'rotate', layerId };
+      }
+
+      const handlePositions: { handle: ResizeHandle; x: number; y: number }[] = [
+        { handle: 'nw', x: -halfW, y: -halfH },
+        { handle: 'n', x: 0, y: -halfH },
+        { handle: 'ne', x: halfW, y: -halfH },
+        { handle: 'e', x: halfW, y: 0 },
+        { handle: 'se', x: halfW, y: halfH },
+        { handle: 's', x: 0, y: halfH },
+        { handle: 'sw', x: -halfW, y: halfH },
+        { handle: 'w', x: -halfW, y: 0 },
+      ];
+
+      for (const pos of handlePositions) {
+        if (Math.abs(localX - pos.x) < threshold && Math.abs(localY - pos.y) < threshold) {
+          return { handle: pos.handle, layerId };
+        }
+      }
+
+      return null;
+    },
+    [artboard, project, selectedLayerIds, zoom, panX, panY]
+  );
+
+  const getCursorForHandle = (handle: ResizeHandle | 'rotate' | null): string => {
+    if (!handle) return 'default';
+    if (handle === 'rotate') return 'crosshair';
+
+    const cursors: Record<ResizeHandle, string> = {
+      'nw': 'nwse-resize',
+      'n': 'ns-resize',
+      'ne': 'nesw-resize',
+      'e': 'ew-resize',
+      'se': 'nwse-resize',
+      's': 'ns-resize',
+      'sw': 'nesw-resize',
+      'w': 'ew-resize',
+    };
+
+    return cursors[handle] || 'default';
+  };
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
+      const rect = canvas.getBoundingClientRect();
+      const canvasX = e.clientX - rect.left;
+      const canvasY = e.clientY - rect.top;
       const { x, y } = screenToCanvas(e.clientX, e.clientY);
 
       if (activeTool === 'hand' || e.button === 1) {
@@ -361,6 +533,27 @@ export function Canvas() {
       }
 
       if (activeTool === 'select') {
+        const handleHit = getHandleAtPoint(canvasX, canvasY);
+        if (handleHit) {
+          const layer = project?.layers[handleHit.layerId];
+          if (layer) {
+            initialTransformRef.current = {
+              x: layer.transform.x,
+              y: layer.transform.y,
+              width: layer.transform.width,
+              height: layer.transform.height,
+              rotation: layer.transform.rotation,
+            };
+            if (handleHit.handle === 'rotate') {
+              startDrag('rotate', e.clientX, e.clientY);
+            } else {
+              setActiveResizeHandle(handleHit.handle);
+              startDrag('resize', e.clientX, e.clientY);
+            }
+            return;
+          }
+        }
+
         const layerId = findLayerAtPoint(x, y);
         if (layerId) {
           if (e.shiftKey) {
@@ -376,16 +569,27 @@ export function Canvas() {
         }
       }
     },
-    [activeTool, screenToCanvas, findLayerAtPoint, selectLayer, deselectAllLayers, startDrag, selectedLayerIds, startDrawing, startMarqueeSelect]
+    [activeTool, screenToCanvas, findLayerAtPoint, selectLayer, deselectAllLayers, startDrag, selectedLayerIds, startDrawing, startMarqueeSelect, getHandleAtPoint, project, setActiveResizeHandle]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      const canvas = canvasRef.current;
+
       if (drawing.isDrawing) {
         const { x, y } = screenToCanvas(e.clientX, e.clientY);
         addDrawingPoint({ x, y });
         render();
         return;
+      }
+
+      if (!isDragging && canvas && activeTool === 'select' && selectedLayerIds.length === 1) {
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const handleHit = getHandleAtPoint(canvasX, canvasY);
+        const newCursor = getCursorForHandle(handleHit?.handle ?? null);
+        setCursorStyle(newCursor);
       }
 
       if (!isDragging) return;
@@ -403,6 +607,153 @@ export function Canvas() {
         const dx = e.clientX - dragCurrentX;
         const dy = e.clientY - dragCurrentY;
         setPan(panX + dx, panY + dy);
+      } else if (dragMode === 'rotate' && selectedLayerIds.length === 1 && artboard && canvas && initialTransformRef.current) {
+        const layerId = selectedLayerIds[0];
+        const layer = project?.layers[layerId];
+        if (layer) {
+          const centerX = canvas.width / 2 + panX;
+          const centerY = canvas.height / 2 + panY;
+          const artboardX = centerX - (artboard.size.width * zoom) / 2;
+          const artboardY = centerY - (artboard.size.height * zoom) / 2;
+
+          const layerCenterX = artboardX + (initialTransformRef.current.x + initialTransformRef.current.width / 2) * zoom;
+          const layerCenterY = artboardY + (initialTransformRef.current.y + initialTransformRef.current.height / 2) * zoom;
+
+          const rect = canvas.getBoundingClientRect();
+          const startDx = dragStartX - rect.left - layerCenterX;
+          const startDy = dragStartY - rect.top - layerCenterY;
+          const currentDx = e.clientX - rect.left - layerCenterX;
+          const currentDy = e.clientY - rect.top - layerCenterY;
+
+          const startAngle = Math.atan2(startDy, startDx);
+          const currentAngle = Math.atan2(currentDy, currentDx);
+          let deltaAngle = (currentAngle - startAngle) * (180 / Math.PI);
+
+          let newRotation = initialTransformRef.current.rotation + deltaAngle;
+
+          if (e.shiftKey) {
+            newRotation = Math.round(newRotation / 15) * 15;
+          }
+
+          while (newRotation > 360) newRotation -= 360;
+          while (newRotation < 0) newRotation += 360;
+
+          updateLayerTransform(layerId, { rotation: newRotation });
+        }
+      } else if (dragMode === 'resize' && selectedLayerIds.length === 1 && activeResizeHandle && initialTransformRef.current) {
+        const layerId = selectedLayerIds[0];
+        const layer = project?.layers[layerId];
+        if (layer) {
+          const dx = (e.clientX - dragStartX) / zoom;
+          const dy = (e.clientY - dragStartY) / zoom;
+
+          const init = initialTransformRef.current;
+          let newX = init.x;
+          let newY = init.y;
+          let newWidth = init.width;
+          let newHeight = init.height;
+
+          const maintainAspect = e.shiftKey;
+          const aspectRatio = init.width / init.height;
+
+          switch (activeResizeHandle) {
+            case 'nw':
+              newX = init.x + dx;
+              newY = init.y + dy;
+              newWidth = init.width - dx;
+              newHeight = init.height - dy;
+              if (maintainAspect) {
+                const delta = Math.max(-dx, -dy);
+                newWidth = init.width + delta;
+                newHeight = newWidth / aspectRatio;
+                newX = init.x + init.width - newWidth;
+                newY = init.y + init.height - newHeight;
+              }
+              break;
+            case 'n':
+              newY = init.y + dy;
+              newHeight = init.height - dy;
+              if (maintainAspect) {
+                newWidth = newHeight * aspectRatio;
+                newX = init.x + (init.width - newWidth) / 2;
+              }
+              break;
+            case 'ne':
+              newY = init.y + dy;
+              newWidth = init.width + dx;
+              newHeight = init.height - dy;
+              if (maintainAspect) {
+                const delta = Math.max(dx, -dy);
+                newWidth = init.width + delta;
+                newHeight = newWidth / aspectRatio;
+                newY = init.y + init.height - newHeight;
+              }
+              break;
+            case 'e':
+              newWidth = init.width + dx;
+              if (maintainAspect) {
+                newHeight = newWidth / aspectRatio;
+                newY = init.y + (init.height - newHeight) / 2;
+              }
+              break;
+            case 'se':
+              newWidth = init.width + dx;
+              newHeight = init.height + dy;
+              if (maintainAspect) {
+                const delta = Math.max(dx, dy);
+                newWidth = init.width + delta;
+                newHeight = newWidth / aspectRatio;
+              }
+              break;
+            case 's':
+              newHeight = init.height + dy;
+              if (maintainAspect) {
+                newWidth = newHeight * aspectRatio;
+                newX = init.x + (init.width - newWidth) / 2;
+              }
+              break;
+            case 'sw':
+              newX = init.x + dx;
+              newWidth = init.width - dx;
+              newHeight = init.height + dy;
+              if (maintainAspect) {
+                const delta = Math.max(-dx, dy);
+                newWidth = init.width + delta;
+                newHeight = newWidth / aspectRatio;
+                newX = init.x + init.width - newWidth;
+              }
+              break;
+            case 'w':
+              newX = init.x + dx;
+              newWidth = init.width - dx;
+              if (maintainAspect) {
+                newHeight = newWidth / aspectRatio;
+                newY = init.y + (init.height - newHeight) / 2;
+              }
+              break;
+          }
+
+          const minSize = 10;
+          if (newWidth < minSize) {
+            if (activeResizeHandle.includes('w')) {
+              newX = init.x + init.width - minSize;
+            }
+            newWidth = minSize;
+          }
+          if (newHeight < minSize) {
+            if (activeResizeHandle.includes('n')) {
+              newY = init.y + init.height - minSize;
+            }
+            newHeight = minSize;
+          }
+
+          updateLayerTransform(layerId, {
+            x: newX,
+            y: newY,
+            width: newWidth,
+            height: newHeight,
+          });
+        }
       } else if (dragMode === 'move' && selectedLayerIds.length > 0 && artboard) {
         const dx = (e.clientX - dragCurrentX) / zoom;
         const dy = (e.clientY - dragCurrentY) / zoom;
@@ -443,7 +794,7 @@ export function Canvas() {
         }
       }
     },
-    [isDragging, dragMode, dragCurrentX, dragCurrentY, panX, panY, setPan, zoom, selectedLayerIds, project, updateLayerTransform, updateDrag, artboard, guides, snapToObjects, snapToGuides, snapToGrid, gridSize, setSmartGuides, drawing.isDrawing, screenToCanvas, addDrawingPoint, render, updateMarqueeSelect]
+    [isDragging, dragMode, dragCurrentX, dragCurrentY, dragStartX, dragStartY, panX, panY, setPan, zoom, selectedLayerIds, project, updateLayerTransform, updateDrag, artboard, guides, snapToObjects, snapToGuides, snapToGrid, gridSize, setSmartGuides, drawing.isDrawing, screenToCanvas, addDrawingPoint, render, updateMarqueeSelect, activeResizeHandle, activeTool, getHandleAtPoint]
   );
 
   const findLayersInRect = useCallback(
@@ -500,9 +851,180 @@ export function Canvas() {
       return;
     }
 
+    initialTransformRef.current = null;
+    setActiveResizeHandle(null);
     endDrag();
     clearSmartGuides();
-  }, [endDrag, clearSmartGuides, drawing.isDrawing, finishDrawing, addPathLayer, penSettings, render, dragMode, endMarqueeSelect, findLayersInRect, selectLayers]);
+  }, [endDrag, clearSmartGuides, drawing.isDrawing, finishDrawing, addPathLayer, penSettings, render, dragMode, endMarqueeSelect, findLayersInRect, selectLayers, setActiveResizeHandle]);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const { x, y } = screenToCanvas(e.clientX, e.clientY);
+      const layerId = findLayerAtPoint(x, y);
+
+      let menuType: ContextMenuType = 'canvas';
+
+      if (layerId) {
+        if (!selectedLayerIds.includes(layerId)) {
+          selectLayer(layerId);
+        }
+
+        if (selectedLayerIds.length > 1 || (selectedLayerIds.length === 1 && selectedLayerIds[0] !== layerId)) {
+          const count = selectedLayerIds.includes(layerId) ? selectedLayerIds.length : 1;
+          if (count > 1) {
+            menuType = 'multi-layer';
+          } else {
+            const layer = project?.layers[layerId];
+            menuType = layer?.type === 'group' ? 'group' : 'layer';
+          }
+        } else {
+          const layer = project?.layers[layerId];
+          menuType = layer?.type === 'group' ? 'group' : 'layer';
+        }
+      } else if (selectedLayerIds.length > 1) {
+        menuType = 'multi-layer';
+      } else if (selectedLayerIds.length === 1) {
+        const layer = project?.layers[selectedLayerIds[0]];
+        menuType = layer?.type === 'group' ? 'group' : 'layer';
+      }
+
+      setContextMenu({
+        position: { x: e.clientX, y: e.clientY },
+        type: menuType,
+      });
+    },
+    [screenToCanvas, findLayerAtPoint, selectedLayerIds, selectLayer, project]
+  );
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleFlipHorizontal = useCallback(() => {
+    selectedLayerIds.forEach((id) => {
+      const layer = project?.layers[id];
+      if (layer) {
+        updateLayer(id, { flipHorizontal: !layer.flipHorizontal });
+      }
+    });
+  }, [selectedLayerIds, project, updateLayer]);
+
+  const handleFlipVertical = useCallback(() => {
+    selectedLayerIds.forEach((id) => {
+      const layer = project?.layers[id];
+      if (layer) {
+        updateLayer(id, { flipVertical: !layer.flipVertical });
+      }
+    });
+  }, [selectedLayerIds, project, updateLayer]);
+
+  const handleResetTransform = useCallback(() => {
+    selectedLayerIds.forEach((id) => {
+      updateLayerTransform(id, {
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        skewX: 0,
+        skewY: 0,
+      });
+      updateLayer(id, { flipHorizontal: false, flipVertical: false });
+    });
+  }, [selectedLayerIds, updateLayerTransform, updateLayer]);
+
+  const handleToggleVisibility = useCallback(() => {
+    selectedLayerIds.forEach((id) => {
+      const layer = project?.layers[id];
+      if (layer) {
+        updateLayer(id, { visible: !layer.visible });
+      }
+    });
+  }, [selectedLayerIds, project, updateLayer]);
+
+  const handleToggleLock = useCallback(() => {
+    selectedLayerIds.forEach((id) => {
+      const layer = project?.layers[id];
+      if (layer) {
+        updateLayer(id, { locked: !layer.locked });
+      }
+    });
+  }, [selectedLayerIds, project, updateLayer]);
+
+  const handleSelectAll = useCallback(() => {
+    if (artboard) {
+      selectLayers(artboard.layerIds);
+    }
+  }, [artboard, selectLayers]);
+
+  const handleZoomFit = useCallback(() => {
+    if (artboard && containerRef.current) {
+      const containerWidth = containerRef.current.clientWidth;
+      const containerHeight = containerRef.current.clientHeight;
+      const scaleX = (containerWidth - 100) / artboard.size.width;
+      const scaleY = (containerHeight - 100) / artboard.size.height;
+      const newZoom = Math.min(scaleX, scaleY, 1);
+      setZoom(newZoom);
+      setPan(0, 0);
+    }
+  }, [artboard, setZoom, setPan]);
+
+  const handleAlignLeft = useCallback(() => {
+    if (selectedLayerIds.length < 2 || !project) return;
+    const layers = selectedLayerIds.map((id) => project.layers[id]).filter(Boolean);
+    const minX = Math.min(...layers.map((l) => l.transform.x));
+    layers.forEach((layer) => {
+      updateLayerTransform(layer.id, { x: minX });
+    });
+  }, [selectedLayerIds, project, updateLayerTransform]);
+
+  const handleAlignCenter = useCallback(() => {
+    if (selectedLayerIds.length < 2 || !project) return;
+    const layers = selectedLayerIds.map((id) => project.layers[id]).filter(Boolean);
+    const centers = layers.map((l) => l.transform.x + l.transform.width / 2);
+    const avgCenter = centers.reduce((a, b) => a + b, 0) / centers.length;
+    layers.forEach((layer) => {
+      updateLayerTransform(layer.id, { x: avgCenter - layer.transform.width / 2 });
+    });
+  }, [selectedLayerIds, project, updateLayerTransform]);
+
+  const handleAlignRight = useCallback(() => {
+    if (selectedLayerIds.length < 2 || !project) return;
+    const layers = selectedLayerIds.map((id) => project.layers[id]).filter(Boolean);
+    const maxRight = Math.max(...layers.map((l) => l.transform.x + l.transform.width));
+    layers.forEach((layer) => {
+      updateLayerTransform(layer.id, { x: maxRight - layer.transform.width });
+    });
+  }, [selectedLayerIds, project, updateLayerTransform]);
+
+  const handleAlignTop = useCallback(() => {
+    if (selectedLayerIds.length < 2 || !project) return;
+    const layers = selectedLayerIds.map((id) => project.layers[id]).filter(Boolean);
+    const minY = Math.min(...layers.map((l) => l.transform.y));
+    layers.forEach((layer) => {
+      updateLayerTransform(layer.id, { y: minY });
+    });
+  }, [selectedLayerIds, project, updateLayerTransform]);
+
+  const handleAlignMiddle = useCallback(() => {
+    if (selectedLayerIds.length < 2 || !project) return;
+    const layers = selectedLayerIds.map((id) => project.layers[id]).filter(Boolean);
+    const middles = layers.map((l) => l.transform.y + l.transform.height / 2);
+    const avgMiddle = middles.reduce((a, b) => a + b, 0) / middles.length;
+    layers.forEach((layer) => {
+      updateLayerTransform(layer.id, { y: avgMiddle - layer.transform.height / 2 });
+    });
+  }, [selectedLayerIds, project, updateLayerTransform]);
+
+  const handleAlignBottom = useCallback(() => {
+    if (selectedLayerIds.length < 2 || !project) return;
+    const layers = selectedLayerIds.map((id) => project.layers[id]).filter(Boolean);
+    const maxBottom = Math.max(...layers.map((l) => l.transform.y + l.transform.height));
+    layers.forEach((layer) => {
+      updateLayerTransform(layer.id, { y: maxBottom - layer.transform.height });
+    });
+  }, [selectedLayerIds, project, updateLayerTransform]);
+
+  const selectedLayer = selectedLayerIds.length === 1 ? project?.layers[selectedLayerIds[0]] : null;
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -517,13 +1039,17 @@ export function Canvas() {
     [zoom, panX, panY, setPan]
   );
 
+  const effectiveCursor = activeTool === 'hand'
+    ? 'grab'
+    : activeTool === 'select'
+      ? (cursorStyle !== 'default' ? cursorStyle : 'default')
+      : 'crosshair';
+
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-hidden cursor-crosshair relative"
-      style={{
-        cursor: activeTool === 'hand' ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair',
-      }}
+      className="flex-1 overflow-hidden relative"
+      style={{ cursor: effectiveCursor }}
     >
       {showRulers && (
         <Rulers
@@ -538,6 +1064,7 @@ export function Canvas() {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onContextMenu={handleContextMenu}
         className="absolute"
         style={{
           top: showRulers ? RULER_SIZE : 0,
@@ -546,6 +1073,53 @@ export function Canvas() {
           height: showRulers ? `calc(100% - ${RULER_SIZE}px)` : '100%',
         }}
       />
+
+      {contextMenu && (
+        <ContextMenu
+          position={contextMenu.position}
+          type={contextMenu.type}
+          onClose={closeContextMenu}
+          onCut={cutLayers}
+          onCopy={copyLayers}
+          onPaste={pasteLayers}
+          onDuplicate={() => selectedLayerIds.forEach((id) => duplicateLayer(id))}
+          onDelete={() => selectedLayerIds.forEach((id) => removeLayer(id))}
+          onSelectAll={handleSelectAll}
+          onToggleVisibility={handleToggleVisibility}
+          onToggleLock={handleToggleLock}
+          onBringToFront={() => selectedLayerIds.forEach((id) => moveLayerToTop(id))}
+          onBringForward={() => selectedLayerIds.forEach((id) => moveLayerUp(id))}
+          onSendBackward={() => selectedLayerIds.forEach((id) => moveLayerDown(id))}
+          onSendToBack={() => selectedLayerIds.forEach((id) => moveLayerToBottom(id))}
+          onGroup={() => groupLayers(selectedLayerIds)}
+          onUngroup={() => selectedLayerIds.length === 1 && ungroupLayers(selectedLayerIds[0])}
+          onFlipHorizontal={handleFlipHorizontal}
+          onFlipVertical={handleFlipVertical}
+          onResetTransform={handleResetTransform}
+          onCopyStyle={copyLayerStyle}
+          onPasteStyle={pasteLayerStyle}
+          onAddText={() => addTextLayer('New Text')}
+          onAddShape={addShapeLayer}
+          onToggleGrid={toggleGrid}
+          onToggleRulers={toggleRulers}
+          onZoomIn={() => setZoom(zoom * 1.2)}
+          onZoomOut={() => setZoom(zoom / 1.2)}
+          onZoomFit={handleZoomFit}
+          onAlignLeft={handleAlignLeft}
+          onAlignCenter={handleAlignCenter}
+          onAlignRight={handleAlignRight}
+          onAlignTop={handleAlignTop}
+          onAlignMiddle={handleAlignMiddle}
+          onAlignBottom={handleAlignBottom}
+          isVisible={selectedLayer?.visible ?? true}
+          isLocked={selectedLayer?.locked ?? false}
+          showGrid={showGrid}
+          showRulers={showRulers}
+          hasClipboard={copiedLayers.length > 0}
+          hasStyleClipboard={copiedStyle !== null}
+          selectedCount={selectedLayerIds.length}
+        />
+      )}
     </div>
   );
 }
@@ -565,10 +1139,41 @@ const BLEND_MODE_MAP: Record<string, GlobalCompositeOperation> = {
   'exclusion': 'exclusion',
 };
 
+function renderLayerWithChildren(
+  ctx: CanvasRenderingContext2D,
+  layer: Layer,
+  project: { layers: Record<string, Layer>; assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
+) {
+  if (layer.type === 'group') {
+    const group = layer as GroupLayer;
+    if (!group.visible) return;
+
+    const { transform } = group;
+    ctx.save();
+
+    ctx.translate(transform.x, transform.y);
+    ctx.rotate((transform.rotation * Math.PI) / 180);
+    ctx.scale(transform.scaleX, transform.scaleY);
+    ctx.globalAlpha *= transform.opacity;
+
+    const sortedChildIds = [...group.childIds].reverse();
+    sortedChildIds.forEach((childId) => {
+      const child = project.layers[childId];
+      if (child && child.visible) {
+        renderLayer(ctx, child, project);
+      }
+    });
+
+    ctx.restore();
+  } else {
+    renderLayer(ctx, layer, project);
+  }
+}
+
 function renderLayer(
   ctx: CanvasRenderingContext2D,
   layer: Layer,
-  project: { assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
+  project: { layers?: Record<string, Layer>; assets: Record<string, { dataUrl?: string; blobUrl?: string }> }
 ) {
   const { transform } = layer;
   const shadow = layer.shadow ?? { enabled: false, color: 'rgba(0, 0, 0, 0.5)', blur: 10, offsetX: 0, offsetY: 4 };
@@ -746,6 +1351,20 @@ function renderImageLayer(
     return;
   }
 
+  const src = asset.dataUrl ?? asset.blobUrl ?? '';
+  const img = getCachedImage(src);
+
+  if (!img) {
+    ctx.fillStyle = '#27272a';
+    ctx.fillRect(0, 0, layer.transform.width, layer.transform.height);
+    ctx.fillStyle = '#71717a';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Loading...', layer.transform.width / 2, layer.transform.height / 2);
+    return;
+  }
+
   const flipH = layer.flipHorizontal ?? false;
   const flipV = layer.flipVertical ?? false;
 
@@ -758,21 +1377,46 @@ function renderImageLayer(
     ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
   }
 
-  const img = new window.Image();
-  img.src = asset.dataUrl ?? asset.blobUrl ?? '';
-  if (img.complete) {
+  {
     const { filters } = layer;
     const filterParts: string[] = [];
 
-    if (filters.brightness !== 100) {
-      filterParts.push(`brightness(${filters.brightness}%)`);
+    let effectiveBrightness = filters.brightness;
+    if (filters.exposure !== 0) {
+      effectiveBrightness = effectiveBrightness * (1 + filters.exposure / 100);
     }
-    if (filters.contrast !== 100) {
-      filterParts.push(`contrast(${filters.contrast}%)`);
+    if (filters.highlights > 0) {
+      effectiveBrightness = effectiveBrightness * (1 + filters.highlights / 200);
     }
-    if (filters.saturation !== 100) {
-      filterParts.push(`saturate(${filters.saturation}%)`);
+    if (filters.shadows > 0) {
+      effectiveBrightness = effectiveBrightness * (1 + filters.shadows / 300);
     }
+    if (effectiveBrightness !== 100) {
+      filterParts.push(`brightness(${Math.round(effectiveBrightness)}%)`);
+    }
+
+    let effectiveContrast = filters.contrast;
+    if (filters.clarity !== 0) {
+      effectiveContrast = effectiveContrast * (1 + filters.clarity / 150);
+    }
+    if (filters.highlights < 0) {
+      effectiveContrast = effectiveContrast * (1 + filters.highlights / 400);
+    }
+    if (filters.shadows < 0) {
+      effectiveContrast = effectiveContrast * (1 + filters.shadows / 400);
+    }
+    if (effectiveContrast !== 100) {
+      filterParts.push(`contrast(${Math.round(effectiveContrast)}%)`);
+    }
+
+    let effectiveSaturation = filters.saturation;
+    if (filters.vibrance !== 0) {
+      effectiveSaturation = effectiveSaturation * (1 + filters.vibrance / 150);
+    }
+    if (effectiveSaturation !== 100) {
+      filterParts.push(`saturate(${Math.round(effectiveSaturation)}%)`);
+    }
+
     if (filters.hue !== 0) {
       filterParts.push(`hue-rotate(${filters.hue}deg)`);
     }
