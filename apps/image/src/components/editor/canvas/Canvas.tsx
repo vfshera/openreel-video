@@ -1616,7 +1616,7 @@ export function Canvas() {
 
           const startAngle = Math.atan2(startDy, startDx);
           const currentAngle = Math.atan2(currentDy, currentDx);
-          let deltaAngle = (currentAngle - startAngle) * (180 / Math.PI);
+          const deltaAngle = (currentAngle - startAngle) * (180 / Math.PI);
 
           let newRotation = initialTransformRef.current.rotation + deltaAngle;
 

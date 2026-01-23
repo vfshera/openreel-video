@@ -471,7 +471,7 @@ export function renderBrush(
 }
 
 export function smoothMesh(mesh: DisplacementMesh, iterations: number = 1): DisplacementMesh {
-  let result = { ...mesh, displacements: new Float32Array(mesh.displacements) };
+  const result = { ...mesh, displacements: new Float32Array(mesh.displacements) };
 
   for (let iter = 0; iter < iterations; iter++) {
     const newDisplacements = new Float32Array(result.displacements);
